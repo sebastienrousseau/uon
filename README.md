@@ -597,7 +597,7 @@ uon remove prod
 ## Architecture
 
 ```
-src/
+src/uon/
 ├── __init__.py              # Package root
 ├── cli.py                   # Click CLI — entry point, subcommands, exec flow
 ├── auth/
@@ -795,18 +795,45 @@ sudo systemctl restart sshd
 
 ## Development
 
+### Prerequisites
+
+- Python 3.12+
+- [Poetry](https://python-poetry.org/docs/#installation) (install via `pipx install poetry`)
+
+### Setup
+
 ```bash
-# Install dev dependencies
-pip install -e ".[dev]"
+# Clone the repository
+git clone https://github.com/sebastienrousseau/uon.git
+cd uon
 
-# Run tests with coverage (must be 100%)
-pytest
+# Install all dependencies (main + dev)
+poetry install
 
-# Lint
-ruff check .
+# Install pre-commit hooks
+poetry run pre-commit install
+```
 
-# Type-check
-mypy src/
+### Common Commands
+
+```bash
+# Run the full test suite (must reach 100% branch coverage)
+poetry run pytest
+
+# Lint with Ruff
+poetry run ruff check .
+
+# Auto-format code
+poetry run ruff format .
+
+# Type-check with MyPy (strict mode)
+poetry run mypy src/
+
+# Run the CLI locally
+poetry run uon <target> '<command>'
+
+# Run all pre-commit hooks against every file
+poetry run pre-commit run --all-files
 ```
 
 ---

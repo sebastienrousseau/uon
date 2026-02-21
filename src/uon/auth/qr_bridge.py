@@ -67,9 +67,7 @@ BRIDGE_TIMEOUT_SECONDS = 120
 # Networking helpers
 # ---------------------------------------------------------------------------
 
-_PRIVATE_RE = re.compile(
-    r"^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)"
-)
+_PRIVATE_RE = re.compile(r"^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)")
 
 
 def _get_lan_ip() -> str:
@@ -240,10 +238,7 @@ def _build_app(
         _check_token(request)
 
         allow_credentials_js = json.dumps(
-            [
-                {"type": "public-key", "id": cid}
-                for cid in credential_ids_b64
-            ]
+            [{"type": "public-key", "id": cid} for cid in credential_ids_b64]
         )
 
         html = f"""\
@@ -486,9 +481,7 @@ def request_signature_via_qr(
     server_thread.join(timeout=3)
 
     if not got_result:
-        raise TimeoutError(
-            f"No assertion received from mobile device within {timeout}s."
-        )
+        raise TimeoutError(f"No assertion received from mobile device within {timeout}s.")
 
     if result.error is not None:
         raise RuntimeError(f"QR bridge error: {result.error}")

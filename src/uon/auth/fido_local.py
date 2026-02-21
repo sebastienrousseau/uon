@@ -90,7 +90,7 @@ class _CliInteraction(UserInteraction):
 
     def request_pin(self, permissions: object, rd_id: str | None = None) -> str:
         """Read the FIDO2 PIN from the terminal with hidden input via ``getpass``."""
-        import getpass  # noqa: S105 — we only read, never store
+        import getpass
 
         return getpass.getpass("FIDO2 PIN: ")
 
@@ -182,6 +182,7 @@ def _discover_client(rp_id: str) -> Fido2Client:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def _make_rp() -> PublicKeyCredentialRpEntity:
     """Construct the WebAuthn Relying Party entity for uon.
@@ -319,7 +320,7 @@ def authenticate(
         for cid in credential_ids
     ]
 
-    request_options, state = server.authenticate_begin(
+    request_options, _state = server.authenticate_begin(
         credentials=allow_list,
         user_verification=UserVerificationRequirement.REQUIRED,
     )

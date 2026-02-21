@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from starlette.testclient import TestClient
 
-from src.auth.qr_bridge import (
+from uon.auth.qr_bridge import (
     QrBridgeResult,
     _build_app,
     _get_lan_ip,
@@ -20,12 +20,13 @@ from src.auth.qr_bridge import (
 
 # ── _get_lan_ip() ────────────────────────────────────────────────────
 
+
 class TestGetLanIp:
     def test_success(self, monkeypatch: pytest.MonkeyPatch) -> None:
         mock_sock = MagicMock()
         mock_sock.getsockname.return_value = ("192.168.1.42", 0)
         monkeypatch.setattr(
-            "src.auth.qr_bridge.socket.socket",
+            "uon.auth.qr_bridge.socket.socket",
             lambda *a, **kw: mock_sock,
         )
         assert _get_lan_ip() == "192.168.1.42"
@@ -35,7 +36,7 @@ class TestGetLanIp:
         mock_sock.connect.side_effect = OSError("no route")
         mock_sock.getsockname.return_value = ("127.0.0.1", 0)
         monkeypatch.setattr(
-            "src.auth.qr_bridge.socket.socket",
+            "uon.auth.qr_bridge.socket.socket",
             lambda *a, **kw: mock_sock,
         )
         result = _get_lan_ip()
@@ -44,9 +45,10 @@ class TestGetLanIp:
 
 # ── _is_private_ip() ────────────────────────────────────────────────
 
+
 class TestIsPrivateIp:
     @pytest.mark.parametrize(
-        "ip,expected",
+        ("ip", "expected"),
         [
             ("192.168.1.1", True),
             ("10.0.0.1", True),
@@ -61,6 +63,7 @@ class TestIsPrivateIp:
 
 
 # ── QrBridgeResult ──────────────────────────────────────────────────
+
 
 class TestQrBridgeResult:
     def test_initial_state(self) -> None:
@@ -87,14 +90,17 @@ class TestQrBridgeResult:
 
 # ── _build_app() route tests ────────────────────────────────────────
 
+
 class TestBuildApp:
     @pytest.fixture(autouse=True)
     def _patch_private_ip(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """TestClient sends from 'testclient' — make the IP guard accept it."""
-        monkeypatch.setattr("src.auth.qr_bridge._is_private_ip", lambda _: True)
+        monkeypatch.setattr("uon.auth.qr_bridge._is_private_ip", lambda _: True)
 
     def _make_app(
-        self, token: str = "test-token-123", result: QrBridgeResult | None = None  # noqa: S107
+        self,
+        token: str = "test-token-123",  # noqa: S107
+        result: QrBridgeResult | None = None,
     ) -> tuple[TestClient, str, QrBridgeResult]:
         if result is None:
             result = QrBridgeResult()
@@ -122,7 +128,7 @@ class TestBuildApp:
 
     def test_sign_non_private_ip(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Override the autouse fixture's patch
-        monkeypatch.setattr("src.auth.qr_bridge._is_private_ip", lambda _: False)
+        monkeypatch.setattr("uon.auth.qr_bridge._is_private_ip", lambda _: False)
         client, token, _ = self._make_app()
         resp = client.get(f"/sign?token={token}")
         assert resp.status_code == 403
@@ -168,7 +174,7 @@ class TestBuildApp:
         assert resp.status_code == 403
 
     def test_callback_non_private_ip(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr("src.auth.qr_bridge._is_private_ip", lambda _: False)
+        monkeypatch.setattr("uon.auth.qr_bridge._is_private_ip", lambda _: False)
         client, token, _ = self._make_app()
         body = {
             "credentialId": "a",
@@ -205,6 +211,7 @@ class TestBuildApp:
 
 # ── _print_qr() ─────────────────────────────────────────────────────
 
+
 class TestPrintQr:
     def test_prints_to_stderr(self, capsys: pytest.CaptureFixture[str]) -> None:
         _print_qr("http://192.168.1.1:8080/sign?token=abc")
@@ -213,6 +220,7 @@ class TestPrintQr:
 
 
 # ── _ServerThread ────────────────────────────────────────────────────
+
 
 class TestServerThread:
     def test_init(self) -> None:
@@ -242,11 +250,12 @@ class TestServerThread:
 
 # ── request_signature_via_qr() ──────────────────────────────────────
 
+
 class TestRequestSignatureViaQr:
-    @patch("src.auth.qr_bridge._print_qr")
-    @patch("src.auth.qr_bridge._ServerThread")
-    @patch("src.auth.qr_bridge._get_lan_ip", return_value="192.168.1.5")
-    @patch("src.auth.qr_bridge.time.sleep")
+    @patch("uon.auth.qr_bridge._print_qr")
+    @patch("uon.auth.qr_bridge._ServerThread")
+    @patch("uon.auth.qr_bridge._get_lan_ip", return_value="192.168.1.5")
+    @patch("uon.auth.qr_bridge.time.sleep")
     def test_success(
         self,
         mock_sleep: MagicMock,
@@ -264,7 +273,7 @@ class TestRequestSignatureViaQr:
         mock_thread = MagicMock()
         mock_thread_cls.return_value = mock_thread
 
-        with patch("src.auth.qr_bridge.QrBridgeResult") as mock_result_cls:
+        with patch("uon.auth.qr_bridge.QrBridgeResult") as mock_result_cls:
             mock_result = MagicMock()
             mock_result.wait.return_value = True
             mock_result.error = None
@@ -282,10 +291,10 @@ class TestRequestSignatureViaQr:
         mock_thread.start.assert_called_once()
         mock_thread.shutdown.assert_called_once()
 
-    @patch("src.auth.qr_bridge._print_qr")
-    @patch("src.auth.qr_bridge._ServerThread")
-    @patch("src.auth.qr_bridge._get_lan_ip", return_value="192.168.1.5")
-    @patch("src.auth.qr_bridge.time.sleep")
+    @patch("uon.auth.qr_bridge._print_qr")
+    @patch("uon.auth.qr_bridge._ServerThread")
+    @patch("uon.auth.qr_bridge._get_lan_ip", return_value="192.168.1.5")
+    @patch("uon.auth.qr_bridge.time.sleep")
     def test_timeout(
         self,
         mock_sleep: MagicMock,
@@ -296,7 +305,7 @@ class TestRequestSignatureViaQr:
         mock_thread = MagicMock()
         mock_thread_cls.return_value = mock_thread
 
-        with patch("src.auth.qr_bridge.QrBridgeResult") as mock_result_cls:
+        with patch("uon.auth.qr_bridge.QrBridgeResult") as mock_result_cls:
             mock_result = MagicMock()
             mock_result.wait.return_value = False
             mock_result_cls.return_value = mock_result
@@ -309,10 +318,10 @@ class TestRequestSignatureViaQr:
                     timeout=0.01,
                 )
 
-    @patch("src.auth.qr_bridge._print_qr")
-    @patch("src.auth.qr_bridge._ServerThread")
-    @patch("src.auth.qr_bridge._get_lan_ip", return_value="192.168.1.5")
-    @patch("src.auth.qr_bridge.time.sleep")
+    @patch("uon.auth.qr_bridge._print_qr")
+    @patch("uon.auth.qr_bridge._ServerThread")
+    @patch("uon.auth.qr_bridge._get_lan_ip", return_value="192.168.1.5")
+    @patch("uon.auth.qr_bridge.time.sleep")
     def test_error(
         self,
         mock_sleep: MagicMock,
@@ -323,7 +332,7 @@ class TestRequestSignatureViaQr:
         mock_thread = MagicMock()
         mock_thread_cls.return_value = mock_thread
 
-        with patch("src.auth.qr_bridge.QrBridgeResult") as mock_result_cls:
+        with patch("uon.auth.qr_bridge.QrBridgeResult") as mock_result_cls:
             mock_result = MagicMock()
             mock_result.wait.return_value = True
             mock_result.error = "phone error"

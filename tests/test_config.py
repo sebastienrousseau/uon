@@ -6,22 +6,23 @@ from pathlib import Path
 
 import pytest
 
-from src.utils.config import Target, TargetStore, _config_dir
+from uon.utils.config import Target, TargetStore, _config_dir
 
 # ── _config_dir() ─────────────────────────────────────────────────────
+
 
 class TestConfigDir:
     """Platform-dependent config directory resolution."""
 
     def test_darwin(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-        monkeypatch.setattr("src.utils.config.sys.platform", "darwin")
-        monkeypatch.setattr("src.utils.config.Path.home", lambda: tmp_path)
+        monkeypatch.setattr("uon.utils.config.sys.platform", "darwin")
+        monkeypatch.setattr("uon.utils.config.Path.home", lambda: tmp_path)
         result = _config_dir()
         assert result == tmp_path / "Library" / "Application Support" / "uon"
         assert result.is_dir()
 
     def test_win32(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-        monkeypatch.setattr("src.utils.config.sys.platform", "win32")
+        monkeypatch.setattr("uon.utils.config.sys.platform", "win32")
         appdata = tmp_path / "AppData" / "Roaming"
         appdata.mkdir(parents=True)
         monkeypatch.setenv("APPDATA", str(appdata))
@@ -30,14 +31,14 @@ class TestConfigDir:
         assert result.is_dir()
 
     def test_win32_no_appdata(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-        monkeypatch.setattr("src.utils.config.sys.platform", "win32")
+        monkeypatch.setattr("uon.utils.config.sys.platform", "win32")
         monkeypatch.delenv("APPDATA", raising=False)
-        monkeypatch.setattr("src.utils.config.Path.home", lambda: tmp_path)
+        monkeypatch.setattr("uon.utils.config.Path.home", lambda: tmp_path)
         result = _config_dir()
         assert result == tmp_path / "uon"
 
     def test_linux_xdg(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-        monkeypatch.setattr("src.utils.config.sys.platform", "linux")
+        monkeypatch.setattr("uon.utils.config.sys.platform", "linux")
         xdg = tmp_path / "xdg"
         monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg))
         result = _config_dir()
@@ -45,14 +46,15 @@ class TestConfigDir:
         assert result.is_dir()
 
     def test_linux_default(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-        monkeypatch.setattr("src.utils.config.sys.platform", "linux")
+        monkeypatch.setattr("uon.utils.config.sys.platform", "linux")
         monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
-        monkeypatch.setattr("src.utils.config.Path.home", lambda: tmp_path)
+        monkeypatch.setattr("uon.utils.config.Path.home", lambda: tmp_path)
         result = _config_dir()
         assert result == tmp_path / ".config" / "uon"
 
 
 # ── Target dataclass ──────────────────────────────────────────────────
+
 
 class TestTarget:
     def test_defaults(self) -> None:
@@ -62,13 +64,15 @@ class TestTarget:
         assert t.credential_ids == []
 
     def test_from_dict_full(self) -> None:
-        t = Target.from_dict({
-            "alias": "prod",
-            "host": "10.0.0.1",
-            "port": 2222,
-            "user": "deploy",
-            "credential_ids": ["abc", "def"],
-        })
+        t = Target.from_dict(
+            {
+                "alias": "prod",
+                "host": "10.0.0.1",
+                "port": 2222,
+                "user": "deploy",
+                "credential_ids": ["abc", "def"],
+            }
+        )
         assert t.alias == "prod"
         assert t.port == 2222
         assert t.credential_ids == ["abc", "def"]
@@ -81,6 +85,7 @@ class TestTarget:
 
 
 # ── TargetStore ───────────────────────────────────────────────────────
+
 
 class TestTargetStore:
     def test_empty(self, target_store: TargetStore) -> None:
@@ -113,9 +118,7 @@ class TestTargetStore:
     def test_remove_missing(self, target_store: TargetStore) -> None:
         assert target_store.remove("ghost") is False
 
-    def test_persistence_round_trip(
-        self, tmp_targets_file: Path, sample_target: Target
-    ) -> None:
+    def test_persistence_round_trip(self, tmp_targets_file: Path, sample_target: Target) -> None:
         store1 = TargetStore(path=tmp_targets_file)
         store1.add(sample_target)
 

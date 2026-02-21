@@ -8,28 +8,28 @@ from unittest.mock import MagicMock
 import click.testing
 import pytest
 
-from src.utils.config import Target, TargetStore
+from uon.utils.config import Target, TargetStore
 
 
-@pytest.fixture()
+@pytest.fixture
 def tmp_targets_file(tmp_path: Path) -> Path:
     """Return a path to a non-existent targets.json inside *tmp_path*."""
     return tmp_path / "targets.json"
 
 
-@pytest.fixture()
+@pytest.fixture
 def target_store(tmp_targets_file: Path) -> TargetStore:
     """Return a TargetStore backed by a temporary file."""
     return TargetStore(path=tmp_targets_file)
 
 
-@pytest.fixture()
+@pytest.fixture
 def sample_target() -> Target:
     """A convenient Target with sensible defaults."""
     return Target(alias="dev", host="192.168.1.10", port=22, user="admin")
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_paramiko_client() -> MagicMock:
     """A MagicMock standing in for ``paramiko.SSHClient``."""
     client = MagicMock()
@@ -44,13 +44,13 @@ def mock_paramiko_client() -> MagicMock:
     return client
 
 
-@pytest.fixture()
+@pytest.fixture
 def cli_runner() -> click.testing.CliRunner:
     """A Click test runner."""
     return click.testing.CliRunner()
 
 
-@pytest.fixture()
+@pytest.fixture
 def isolate_store(tmp_targets_file: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Monkeypatch ``TargetStore`` in ``src.cli`` to use a temp path.
 

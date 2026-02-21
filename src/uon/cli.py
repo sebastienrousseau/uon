@@ -40,19 +40,19 @@ from typing import Any
 
 import click
 
-from src.auth.fido_local import (
+from uon.auth.fido_local import (
     RP_ID,
     NoPlatformAuthenticatorError,
 )
-from src.auth.fido_local import (
+from uon.auth.fido_local import (
     authenticate as fido_authenticate,
 )
-from src.auth.fido_local import (
+from uon.auth.fido_local import (
     register as fido_register,
 )
-from src.auth.qr_bridge import request_signature_via_qr
-from src.transport.ssh_client import ExecResult, execute_signed, request_challenge
-from src.utils.config import Target, TargetStore
+from uon.auth.qr_bridge import request_signature_via_qr
+from uon.transport.ssh_client import ExecResult, execute_signed, request_challenge
+from uon.utils.config import Target, TargetStore
 
 # ---------------------------------------------------------------------------
 # CLI group
@@ -171,7 +171,7 @@ def register(alias: str, user_name: str | None) -> None:
     click.echo("You may be prompted for biometric verification.\n")
 
     try:
-        attestation, credential_id = fido_register(
+        _attestation, credential_id = fido_register(
             user_id=user_id,
             user_name=display_name,
         )
@@ -228,8 +228,7 @@ def _run_command(target_alias: str, command: str) -> None:
 
     if not target.credential_ids:
         click.echo(
-            f"No FIDO2 credentials for '{target_alias}'.  "
-            "Run 'uon register' first.",
+            f"No FIDO2 credentials for '{target_alias}'.  Run 'uon register' first.",
             err=True,
         )
         raise SystemExit(1)
@@ -315,9 +314,7 @@ def _resolve_signature(
             "signature": base64.b64encode(response.signature).decode(),
         }
     except NoPlatformAuthenticatorError:
-        click.echo(
-            "No local authenticator found — launching QR bridge …", err=True
-        )
+        click.echo("No local authenticator found — launching QR bridge …", err=True)
     except Exception as exc:
         click.echo(
             f"Local authenticator error ({exc}) — falling back to QR bridge …",

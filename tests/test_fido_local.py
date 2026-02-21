@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.auth.fido_local import (
+from uon.auth.fido_local import (
     RP_ID,
     RP_NAME,
     NoPlatformAuthenticatorError,
@@ -21,6 +21,7 @@ from src.auth.fido_local import (
 
 # ── Constants ─────────────────────────────────────────────────────────
 
+
 class TestConstants:
     def test_rp_id(self) -> None:
         assert RP_ID == "uon.local"
@@ -31,6 +32,7 @@ class TestConstants:
 
 
 # ── _CliInteraction ──────────────────────────────────────────────────
+
 
 class TestCliInteraction:
     def test_prompt_up(self, capsys: pytest.CaptureFixture[str]) -> None:
@@ -49,9 +51,10 @@ class TestCliInteraction:
 
 # ── _discover_client() ───────────────────────────────────────────────
 
+
 class TestDiscoverClient:
     def test_darwin_touchid(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr("src.auth.fido_local.sys.platform", "darwin")
+        monkeypatch.setattr("uon.auth.fido_local.sys.platform", "darwin")
         mock_client = MagicMock()
         fake_mod = MagicMock()
         fake_mod.MacOSClient.return_value = mock_client
@@ -61,25 +64,21 @@ class TestDiscoverClient:
         assert result is mock_client
 
     def test_darwin_fallback_to_hid(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr("src.auth.fido_local.sys.platform", "darwin")
+        monkeypatch.setattr("uon.auth.fido_local.sys.platform", "darwin")
         # MacOSClient constructor raises
         fake_mod = MagicMock()
         fake_mod.MacOSClient.side_effect = Exception("no touchid")
         monkeypatch.setitem(sys.modules, "fido2.client", fake_mod)
 
         hid_device = MagicMock()
-        monkeypatch.setattr(
-            "src.auth.fido_local.CtapHidDevice.list_devices", lambda: [hid_device]
-        )
+        monkeypatch.setattr("uon.auth.fido_local.CtapHidDevice.list_devices", lambda: [hid_device])
         mock_fido_client = MagicMock()
-        monkeypatch.setattr(
-            "src.auth.fido_local.Fido2Client", lambda *a, **kw: mock_fido_client
-        )
+        monkeypatch.setattr("uon.auth.fido_local.Fido2Client", lambda *a, **kw: mock_fido_client)
         result = _discover_client("uon.local")
         assert result is mock_fido_client
 
     def test_win32_hello(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr("src.auth.fido_local.sys.platform", "win32")
+        monkeypatch.setattr("uon.auth.fido_local.sys.platform", "win32")
         mock_client = MagicMock()
         fake_mod = MagicMock()
         fake_mod.WindowsClient.is_available.return_value = True
@@ -90,51 +89,42 @@ class TestDiscoverClient:
         assert result is mock_client
 
     def test_win32_not_available_fallback(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr("src.auth.fido_local.sys.platform", "win32")
+        monkeypatch.setattr("uon.auth.fido_local.sys.platform", "win32")
         fake_mod = MagicMock()
         fake_mod.WindowsClient.is_available.return_value = False
         monkeypatch.setitem(sys.modules, "fido2.client", fake_mod)
-        monkeypatch.setattr(
-            "src.auth.fido_local.CtapHidDevice.list_devices", lambda: []
-        )
+        monkeypatch.setattr("uon.auth.fido_local.CtapHidDevice.list_devices", lambda: [])
         with pytest.raises(NoPlatformAuthenticatorError):
             _discover_client("uon.local")
 
     def test_win32_exception_fallback(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Cover the except block in the win32 branch (lines 103-104)."""
-        monkeypatch.setattr("src.auth.fido_local.sys.platform", "win32")
+        monkeypatch.setattr("uon.auth.fido_local.sys.platform", "win32")
         fake_mod = MagicMock()
         fake_mod.WindowsClient.is_available.side_effect = OSError("broken")
         monkeypatch.setitem(sys.modules, "fido2.client", fake_mod)
-        monkeypatch.setattr(
-            "src.auth.fido_local.CtapHidDevice.list_devices", lambda: []
-        )
+        monkeypatch.setattr("uon.auth.fido_local.CtapHidDevice.list_devices", lambda: [])
         with pytest.raises(NoPlatformAuthenticatorError):
             _discover_client("uon.local")
 
     def test_linux_hid(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr("src.auth.fido_local.sys.platform", "linux")
+        monkeypatch.setattr("uon.auth.fido_local.sys.platform", "linux")
         hid_device = MagicMock()
-        monkeypatch.setattr(
-            "src.auth.fido_local.CtapHidDevice.list_devices", lambda: [hid_device]
-        )
+        monkeypatch.setattr("uon.auth.fido_local.CtapHidDevice.list_devices", lambda: [hid_device])
         mock_fido_client = MagicMock()
-        monkeypatch.setattr(
-            "src.auth.fido_local.Fido2Client", lambda *a, **kw: mock_fido_client
-        )
+        monkeypatch.setattr("uon.auth.fido_local.Fido2Client", lambda *a, **kw: mock_fido_client)
         result = _discover_client("uon.local")
         assert result is mock_fido_client
 
     def test_no_device_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr("src.auth.fido_local.sys.platform", "linux")
-        monkeypatch.setattr(
-            "src.auth.fido_local.CtapHidDevice.list_devices", lambda: []
-        )
+        monkeypatch.setattr("uon.auth.fido_local.sys.platform", "linux")
+        monkeypatch.setattr("uon.auth.fido_local.CtapHidDevice.list_devices", lambda: [])
         with pytest.raises(NoPlatformAuthenticatorError):
             _discover_client("uon.local")
 
 
 # ── _make_rp / _make_server ──────────────────────────────────────────
+
 
 class TestMakeRpAndServer:
     def test_make_rp_type(self) -> None:
@@ -153,9 +143,10 @@ class TestMakeRpAndServer:
 
 # ── register() ───────────────────────────────────────────────────────
 
+
 class TestRegister:
-    @patch("src.auth.fido_local._make_server")
-    @patch("src.auth.fido_local._discover_client")
+    @patch("uon.auth.fido_local._make_server")
+    @patch("uon.auth.fido_local._discover_client")
     def test_success(self, mock_discover: MagicMock, mock_server_fn: MagicMock) -> None:
         mock_client = MagicMock()
         mock_discover.return_value = mock_client
@@ -179,17 +170,17 @@ class TestRegister:
         assert cred_id == b"cred-id-123"
         assert attestation is auth_data
 
-    @patch("src.auth.fido_local._discover_client")
+    @patch("uon.auth.fido_local._discover_client")
     def test_no_authenticator(self, mock_discover: MagicMock) -> None:
         mock_discover.side_effect = NoPlatformAuthenticatorError("none")
         with pytest.raises(NoPlatformAuthenticatorError):
             register(user_id=b"u", user_name="x")
 
-    @patch("src.auth.fido_local._make_server")
-    @patch("src.auth.fido_local._discover_client")
-    @patch("src.auth.fido_local.platform.system", return_value="Linux")
+    @patch("uon.auth.fido_local._make_server")
+    @patch("uon.auth.fido_local._discover_client")
+    @patch("uon.auth.fido_local.platform.system", return_value="Linux")
     def test_linux_cross_platform(
-        self, _sys: MagicMock, mock_discover: MagicMock, mock_server_fn: MagicMock
+        self, mock_sys: MagicMock, mock_discover: MagicMock, mock_server_fn: MagicMock
     ) -> None:
         mock_client = MagicMock()
         mock_discover.return_value = mock_client
@@ -222,9 +213,10 @@ class TestRegister:
 
 # ── authenticate() ───────────────────────────────────────────────────
 
+
 class TestAuthenticate:
-    @patch("src.auth.fido_local._make_server")
-    @patch("src.auth.fido_local._discover_client")
+    @patch("uon.auth.fido_local._make_server")
+    @patch("uon.auth.fido_local._discover_client")
     def test_success(self, mock_discover: MagicMock, mock_server_fn: MagicMock) -> None:
         mock_client = MagicMock()
         mock_discover.return_value = mock_client
@@ -247,17 +239,15 @@ class TestAuthenticate:
         )
         assert result is mock_response
 
-    @patch("src.auth.fido_local._discover_client")
+    @patch("uon.auth.fido_local._discover_client")
     def test_no_authenticator(self, mock_discover: MagicMock) -> None:
         mock_discover.side_effect = NoPlatformAuthenticatorError("none")
         with pytest.raises(NoPlatformAuthenticatorError):
             authenticate(challenge=b"c", credential_ids=[b"id"])
 
-    @patch("src.auth.fido_local._make_server")
-    @patch("src.auth.fido_local._discover_client")
-    def test_challenge_override(
-        self, mock_discover: MagicMock, mock_server_fn: MagicMock
-    ) -> None:
+    @patch("uon.auth.fido_local._make_server")
+    @patch("uon.auth.fido_local._discover_client")
+    def test_challenge_override(self, mock_discover: MagicMock, mock_server_fn: MagicMock) -> None:
         mock_client = MagicMock()
         mock_discover.return_value = mock_client
         server = MagicMock()
@@ -276,8 +266,8 @@ class TestAuthenticate:
         call_args = mock_client.get_assertion.call_args[0][0]
         assert call_args["challenge"] == b"my-nonce"
 
-    @patch("src.auth.fido_local._make_server")
-    @patch("src.auth.fido_local._discover_client")
+    @patch("uon.auth.fido_local._make_server")
+    @patch("uon.auth.fido_local._discover_client")
     def test_multiple_credentials(
         self, mock_discover: MagicMock, mock_server_fn: MagicMock
     ) -> None:

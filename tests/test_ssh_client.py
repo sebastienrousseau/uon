@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-from src.transport.ssh_client import (
+from uon.transport.ssh_client import (
     ChallengePacket,
     ExecResult,
     _build_envelope,
@@ -23,6 +23,7 @@ from src.transport.ssh_client import (
 )
 
 # ── Data containers ───────────────────────────────────────────────────
+
 
 class TestExecResult:
     def test_frozen(self) -> None:
@@ -51,6 +52,7 @@ class TestChallengePacket:
 
 # ── generate_challenge() ─────────────────────────────────────────────
 
+
 class TestGenerateChallenge:
     def test_nonce_length(self) -> None:
         c = generate_challenge()
@@ -68,6 +70,7 @@ class TestGenerateChallenge:
 
 # ── request_challenge() ──────────────────────────────────────────────
 
+
 class TestRequestChallenge:
     def test_returns_challenge_packet(self) -> None:
         cp = request_challenge("host", 22, "root")
@@ -77,8 +80,9 @@ class TestRequestChallenge:
 
 # ── _connect() ───────────────────────────────────────────────────────
 
+
 class TestConnect:
-    @patch("src.transport.ssh_client.paramiko.SSHClient")
+    @patch("uon.transport.ssh_client.paramiko.SSHClient")
     def test_returns_client(self, mock_ssh_cls: MagicMock) -> None:
         mock_client = mock_ssh_cls.return_value
         result = _connect("example.com", 22, "root")
@@ -95,6 +99,7 @@ class TestConnect:
 
 
 # ── _build_envelope() ────────────────────────────────────────────────
+
 
 class TestBuildEnvelope:
     def test_structure(self) -> None:
@@ -115,6 +120,7 @@ class TestBuildEnvelope:
 
 # ── _wrap_command() ──────────────────────────────────────────────────
 
+
 class TestWrapCommand:
     def test_prefix(self) -> None:
         wrapped = _wrap_command({"hello": "world"})
@@ -130,8 +136,9 @@ class TestWrapCommand:
 
 # ── execute_signed() ─────────────────────────────────────────────────
 
+
 class TestExecuteSigned:
-    @patch("src.transport.ssh_client.paramiko.SSHClient")
+    @patch("uon.transport.ssh_client.paramiko.SSHClient")
     def test_success(self, mock_ssh_cls: MagicMock) -> None:
         client = mock_ssh_cls.return_value
         stdout_chan = MagicMock()
@@ -150,7 +157,7 @@ class TestExecuteSigned:
         assert result.stdout == "result\n"
         client.close.assert_called_once()
 
-    @patch("src.transport.ssh_client.paramiko.SSHClient")
+    @patch("uon.transport.ssh_client.paramiko.SSHClient")
     def test_close_on_error(self, mock_ssh_cls: MagicMock) -> None:
         client = mock_ssh_cls.return_value
         client.connect.side_effect = OSError("refused")
@@ -164,20 +171,21 @@ class TestExecuteSigned:
 
 # ── verify_assertion_locally() ────────────────────────────────────────
 
+
 class TestVerifyAssertionLocally:
-    @pytest.fixture()
-    def _ed25519_key(self) -> Ed25519PrivateKey:
+    @pytest.fixture
+    def ed25519_key(self) -> Ed25519PrivateKey:
         return Ed25519PrivateKey.generate()
 
-    def test_valid_signature(self, _ed25519_key: Ed25519PrivateKey) -> None:
-        pub_bytes = _ed25519_key.public_key().public_bytes_raw()
+    def test_valid_signature(self, ed25519_key: Ed25519PrivateKey) -> None:
+        pub_bytes = ed25519_key.public_key().public_bytes_raw()
         challenge = b"test-challenge"
         authenticator_data = b"\x00" * 37
         client_data_json = b'{"type":"webauthn.get","challenge":"dGVzdC1jaGFsbGVuZ2U"}'
 
         client_data_hash = hashlib.sha256(client_data_json).digest()
         signed_data = authenticator_data + client_data_hash
-        signature = _ed25519_key.sign(signed_data)
+        signature = ed25519_key.sign(signed_data)
 
         assert (
             verify_assertion_locally(
@@ -186,12 +194,9 @@ class TestVerifyAssertionLocally:
             is True
         )
 
-    def test_invalid_signature(self, _ed25519_key: Ed25519PrivateKey) -> None:
-        pub_bytes = _ed25519_key.public_key().public_bytes_raw()
-        assert (
-            verify_assertion_locally(pub_bytes, b"c", b"\x00" * 37, b"{}", b"\xff" * 64)
-            is False
-        )
+    def test_invalid_signature(self, ed25519_key: Ed25519PrivateKey) -> None:
+        pub_bytes = ed25519_key.public_key().public_bytes_raw()
+        assert verify_assertion_locally(pub_bytes, b"c", b"\x00" * 37, b"{}", b"\xff" * 64) is False
 
     def test_wrong_key(self) -> None:
         signing_key = Ed25519PrivateKey.generate()

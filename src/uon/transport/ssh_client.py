@@ -47,6 +47,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 # Data containers
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True, slots=True)
 class ExecResult:
     """Immutable snapshot of a completed remote command execution.
@@ -256,7 +257,7 @@ def execute_signed(
         # a ``ForceCommand`` script) parses the JSON preamble, verifies the
         # FIDO2 signature, and — only then — runs the inner command.
         wrapped_command = _wrap_command(envelope)
-        stdin, stdout, stderr = client.exec_command(wrapped_command, timeout=300)
+        _stdin, stdout, stderr = client.exec_command(wrapped_command, timeout=300)
 
         exit_code = stdout.channel.recv_exit_status()
         return ExecResult(
@@ -325,9 +326,7 @@ def _wrap_command(envelope: dict[str, Any]) -> str:
     Returns:
         A string in the format ``"__UON_EXEC__ <base64>"``.
     """
-    payload_b64 = base64.b64encode(
-        json.dumps(envelope, separators=(",", ":")).encode()
-    ).decode()
+    payload_b64 = base64.b64encode(json.dumps(envelope, separators=(",", ":")).encode()).decode()
     return f"__UON_EXEC__ {payload_b64}"
 
 
