@@ -1,4 +1,4 @@
-"""Tests for src.utils.config — platform config dirs, Target, TargetStore."""
+"""Tests for src.utils.config — platform config dirs, Credential, Target, TargetStore."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from uon.utils.config import Target, TargetStore, _config_dir
+from uon.utils.config import Credential, Target, TargetStore, _config_dir
 
 # ── _config_dir() ─────────────────────────────────────────────────────
 
@@ -53,6 +53,31 @@ class TestConfigDir:
         assert result == tmp_path / ".config" / "uon"
 
 
+# ── Credential dataclass ─────────────────────────────────────────────
+
+
+class TestCredential:
+    def test_defaults(self) -> None:
+        c = Credential(id="abc")
+        assert c.id == "abc"
+        assert c.aaguid == "00000000-0000-0000-0000-000000000000"
+
+    def test_from_dict_full(self) -> None:
+        c = Credential.from_dict({"id": "abc", "aaguid": "2fc0579f-8113-47ea-b116-bb5a8db9202a"})
+        assert c.id == "abc"
+        assert c.aaguid == "2fc0579f-8113-47ea-b116-bb5a8db9202a"
+
+    def test_from_dict_legacy_string(self) -> None:
+        c = Credential.from_dict("bare-string-id")
+        assert c.id == "bare-string-id"
+        assert c.aaguid == "00000000-0000-0000-0000-000000000000"
+
+    def test_from_dict_missing_aaguid(self) -> None:
+        c = Credential.from_dict({"id": "xyz"})
+        assert c.id == "xyz"
+        assert c.aaguid == "00000000-0000-0000-0000-000000000000"
+
+
 # ── Target dataclass ──────────────────────────────────────────────────
 
 
@@ -61,6 +86,7 @@ class TestTarget:
         t = Target(alias="x", host="1.2.3.4")
         assert t.port == 22
         assert t.user == "root"
+        assert t.credentials == []
         assert t.credential_ids == []
 
     def test_from_dict_full(self) -> None:
@@ -70,18 +96,48 @@ class TestTarget:
                 "host": "10.0.0.1",
                 "port": 2222,
                 "user": "deploy",
-                "credential_ids": ["abc", "def"],
+                "credentials": [
+                    {"id": "abc", "aaguid": "2fc0579f-8113-47ea-b116-bb5a8db9202a"},
+                    {"id": "def", "aaguid": "00000000-0000-0000-0000-000000000000"},
+                ],
             }
         )
         assert t.alias == "prod"
         assert t.port == 2222
+        assert len(t.credentials) == 2
         assert t.credential_ids == ["abc", "def"]
+        assert t.credentials[0].aaguid == "2fc0579f-8113-47ea-b116-bb5a8db9202a"
 
     def test_from_dict_minimal(self) -> None:
         t = Target.from_dict({"alias": "box", "host": "h"})
         assert t.port == 22
         assert t.user == "root"
+        assert t.credentials == []
         assert t.credential_ids == []
+
+    def test_from_dict_legacy_credential_ids(self) -> None:
+        t = Target.from_dict(
+            {
+                "alias": "old",
+                "host": "10.0.0.1",
+                "credential_ids": ["abc"],
+            }
+        )
+        assert len(t.credentials) == 1
+        assert t.credentials[0].id == "abc"
+        assert t.credentials[0].aaguid == "00000000-0000-0000-0000-000000000000"
+        assert t.credential_ids == ["abc"]
+
+    def test_credential_ids_property(self) -> None:
+        t = Target(
+            alias="x",
+            host="h",
+            credentials=[
+                Credential(id="a", aaguid="11111111-1111-1111-1111-111111111111"),
+                Credential(id="b"),
+            ],
+        )
+        assert t.credential_ids == ["a", "b"]
 
 
 # ── TargetStore ───────────────────────────────────────────────────────

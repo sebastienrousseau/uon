@@ -16,11 +16,28 @@ from uon.cli import (
     add,
     list_targets,
     main,
+    policy_add,
+    policy_clear,
+    policy_remove,
+    policy_show,
     register,
     remove,
 )
 from uon.transport.ssh_client import ExecResult
-from uon.utils.config import Target, TargetStore
+from uon.utils.config import Credential, Target, TargetStore
+
+# ── helpers ──────────────────────────────────────────────────────────
+
+
+def _make_reg_result(
+    credential_id: bytes = b"cred-id",
+    aaguid: str = "2fc0579f-8113-47ea-b116-bb5a8db9202a",
+    backup_eligible: bool = False,
+) -> object:
+    from uon.auth.fido_local import RegistrationResult
+
+    return RegistrationResult(MagicMock(), credential_id, aaguid, backup_eligible)
+
 
 # ── main group ───────────────────────────────────────────────────────
 
@@ -116,20 +133,25 @@ class TestRegister:
         assert result.exit_code != 0
         assert "Unknown" in result.output
 
+    @patch("uon.cli.PolicyStore")
     @patch("uon.cli.fido_register")
     def test_success(
         self,
         mock_fido: MagicMock,
+        mock_policy_cls: MagicMock,
         cli_runner: click.testing.CliRunner,
         isolate_store: Path,
     ) -> None:
         cli_runner.invoke(add, ["dev", "10.0.0.1"])
-        mock_auth_data = MagicMock()
-        mock_fido.return_value = (mock_auth_data, b"credential-id-bytes")
+        mock_fido.return_value = _make_reg_result()
+        mock_policy_inst = MagicMock()
+        mock_policy_inst.check_credential.return_value = None
+        mock_policy_cls.return_value = mock_policy_inst
 
         result = cli_runner.invoke(register, ["dev"])
         assert result.exit_code == 0
         assert "Credential registered" in result.output
+        assert "AAGUID" in result.output
 
     @patch("uon.cli.fido_register")
     def test_no_authenticator(
@@ -145,6 +167,60 @@ class TestRegister:
 
         result = cli_runner.invoke(register, ["dev"])
         assert result.exit_code != 0
+
+    @patch("uon.cli.PolicyStore")
+    @patch("uon.cli.fido_register")
+    def test_policy_rejects_unlisted(
+        self,
+        mock_fido: MagicMock,
+        mock_policy_cls: MagicMock,
+        cli_runner: click.testing.CliRunner,
+        isolate_store: Path,
+    ) -> None:
+        cli_runner.invoke(add, ["dev", "10.0.0.1"])
+        mock_fido.return_value = _make_reg_result()
+        mock_policy_inst = MagicMock()
+        mock_policy_inst.check_credential.return_value = "Policy rejection: AAGUID not listed"
+        mock_policy_cls.return_value = mock_policy_inst
+
+        result = cli_runner.invoke(register, ["dev"])
+        assert result.exit_code != 0
+
+    @patch("uon.cli.PolicyStore")
+    @patch("uon.cli.fido_register")
+    def test_policy_rejects_backup_eligible(
+        self,
+        mock_fido: MagicMock,
+        mock_policy_cls: MagicMock,
+        cli_runner: click.testing.CliRunner,
+        isolate_store: Path,
+    ) -> None:
+        cli_runner.invoke(add, ["dev", "10.0.0.1"])
+        mock_fido.return_value = _make_reg_result(backup_eligible=True)
+        mock_policy_inst = MagicMock()
+        mock_policy_inst.check_credential.return_value = "Policy rejection: backup-eligible"
+        mock_policy_cls.return_value = mock_policy_inst
+
+        result = cli_runner.invoke(register, ["dev"])
+        assert result.exit_code != 0
+
+    @patch("uon.cli.PolicyStore")
+    @patch("uon.cli.fido_register")
+    def test_open_policy_allows_all(
+        self,
+        mock_fido: MagicMock,
+        mock_policy_cls: MagicMock,
+        cli_runner: click.testing.CliRunner,
+        isolate_store: Path,
+    ) -> None:
+        cli_runner.invoke(add, ["dev", "10.0.0.1"])
+        mock_fido.return_value = _make_reg_result()
+        mock_policy_inst = MagicMock()
+        mock_policy_inst.check_credential.return_value = None
+        mock_policy_cls.return_value = mock_policy_inst
+
+        result = cli_runner.invoke(register, ["dev"])
+        assert result.exit_code == 0
 
 
 # ── _run_command ─────────────────────────────────────────────────────
@@ -172,7 +248,7 @@ class TestRunCommand:
         isolate_store: Path,
     ) -> None:
         store = TargetStore()
-        t = Target(alias="dev", host="10.0.0.1", credential_ids=["Y3JlZA=="])
+        t = Target(alias="dev", host="10.0.0.1", credentials=[Credential(id="Y3JlZA==")])
         store.add(t)
 
         from uon.transport.ssh_client import ChallengePacket
@@ -281,3 +357,68 @@ class TestPrintResult:
         captured = capsys.readouterr()
         assert captured.out == ""
         assert captured.err == ""
+
+
+# ── policy subcommands ──────────────────────────────────────────────
+
+
+class TestPolicyShow:
+    def test_open_policy(self, cli_runner: click.testing.CliRunner, isolate_policy: Path) -> None:
+        result = cli_runner.invoke(policy_show, [])
+        assert result.exit_code == 0
+        assert "OPEN" in result.output
+
+    def test_enforcing_policy(
+        self, cli_runner: click.testing.CliRunner, isolate_policy: Path
+    ) -> None:
+        from uon.utils.policy import PolicyStore
+
+        ps = PolicyStore()
+        ps.add("2fc0579f-8113-47ea-b116-bb5a8db9202a")
+
+        result = cli_runner.invoke(policy_show, [])
+        assert result.exit_code == 0
+        assert "ENFORCING" in result.output
+        assert "2fc0579f-8113-47ea-b116-bb5a8db9202a" in result.output
+
+
+class TestPolicyAdd:
+    def test_valid_aaguid(self, cli_runner: click.testing.CliRunner, isolate_policy: Path) -> None:
+        result = cli_runner.invoke(policy_add, ["2fc0579f-8113-47ea-b116-bb5a8db9202a"])
+        assert result.exit_code == 0
+        assert "Added" in result.output
+
+    def test_invalid_format(
+        self, cli_runner: click.testing.CliRunner, isolate_policy: Path
+    ) -> None:
+        result = cli_runner.invoke(policy_add, ["not-a-uuid"])
+        assert result.exit_code != 0
+        assert "Invalid" in result.output
+
+    def test_duplicate(self, cli_runner: click.testing.CliRunner, isolate_policy: Path) -> None:
+        cli_runner.invoke(policy_add, ["2fc0579f-8113-47ea-b116-bb5a8db9202a"])
+        result = cli_runner.invoke(policy_add, ["2fc0579f-8113-47ea-b116-bb5a8db9202a"])
+        assert result.exit_code == 0
+        assert "already in the policy" in result.output
+
+
+class TestPolicyRemove:
+    def test_existing(self, cli_runner: click.testing.CliRunner, isolate_policy: Path) -> None:
+        cli_runner.invoke(policy_add, ["2fc0579f-8113-47ea-b116-bb5a8db9202a"])
+        result = cli_runner.invoke(policy_remove, ["2fc0579f-8113-47ea-b116-bb5a8db9202a"])
+        assert result.exit_code == 0
+        assert "Removed" in result.output
+
+    def test_missing(self, cli_runner: click.testing.CliRunner, isolate_policy: Path) -> None:
+        result = cli_runner.invoke(policy_remove, ["2fc0579f-8113-47ea-b116-bb5a8db9202a"])
+        assert result.exit_code != 0
+        assert "not found" in result.output
+
+
+class TestPolicyClear:
+    def test_with_entries(self, cli_runner: click.testing.CliRunner, isolate_policy: Path) -> None:
+        cli_runner.invoke(policy_add, ["2fc0579f-8113-47ea-b116-bb5a8db9202a"])
+        cli_runner.invoke(policy_add, ["00000000-0000-0000-0000-000000000000"])
+        result = cli_runner.invoke(policy_clear, [])
+        assert result.exit_code == 0
+        assert "2" in result.output

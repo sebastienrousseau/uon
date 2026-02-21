@@ -8,7 +8,11 @@ from unittest.mock import MagicMock
 import click.testing
 import pytest
 
-from uon.utils.config import Target, TargetStore
+from uon.utils.config import Credential, Target, TargetStore
+from uon.utils.policy import PolicyStore
+
+# Re-export so test modules can import from conftest if convenient
+__all__ = ["Credential", "PolicyStore", "Target", "TargetStore"]
 
 
 @pytest.fixture
@@ -27,6 +31,18 @@ def target_store(tmp_targets_file: Path) -> TargetStore:
 def sample_target() -> Target:
     """A convenient Target with sensible defaults."""
     return Target(alias="dev", host="192.168.1.10", port=22, user="admin")
+
+
+@pytest.fixture
+def tmp_policy_file(tmp_path: Path) -> Path:
+    """Return a path to a non-existent allowed_aaguids.json inside *tmp_path*."""
+    return tmp_path / "allowed_aaguids.json"
+
+
+@pytest.fixture
+def policy_store(tmp_policy_file: Path) -> PolicyStore:
+    """Return a PolicyStore backed by a temporary file."""
+    return PolicyStore(path=tmp_policy_file)
 
 
 @pytest.fixture
@@ -63,3 +79,18 @@ def isolate_store(tmp_targets_file: Path, monkeypatch: pytest.MonkeyPatch) -> Pa
 
     monkeypatch.setattr(TargetStore, "__init__", _patched_init)
     return tmp_targets_file
+
+
+@pytest.fixture
+def isolate_policy(tmp_policy_file: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Monkeypatch ``PolicyStore`` to use a temp path.
+
+    Returns the temp file path for assertions.
+    """
+    _orig_init = PolicyStore.__init__
+
+    def _patched_init(self: PolicyStore, path: Path = tmp_policy_file) -> None:
+        _orig_init(self, path)
+
+    monkeypatch.setattr(PolicyStore, "__init__", _patched_init)
+    return tmp_policy_file

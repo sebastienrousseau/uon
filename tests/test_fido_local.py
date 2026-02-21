@@ -162,13 +162,17 @@ class TestRegister:
 
         cred_data = MagicMock()
         cred_data.credential_id = b"cred-id-123"
+        cred_data.aaguid = MagicMock(__str__=lambda self: "2fc0579f-8113-47ea-b116-bb5a8db9202a")
         auth_data = MagicMock()
         auth_data.credential_data = cred_data
+        auth_data.is_backup_eligible.return_value = False
         server.register_complete.return_value = auth_data
 
-        attestation, cred_id = register(user_id=b"uid", user_name="tester")
-        assert cred_id == b"cred-id-123"
-        assert attestation is auth_data
+        result = register(user_id=b"uid", user_name="tester")
+        assert result.credential_id == b"cred-id-123"
+        assert result.auth_data is auth_data
+        assert result.aaguid == "2fc0579f-8113-47ea-b116-bb5a8db9202a"
+        assert result.backup_eligible is False
 
     @patch("uon.auth.fido_local._discover_client")
     def test_no_authenticator(self, mock_discover: MagicMock) -> None:
@@ -195,8 +199,10 @@ class TestRegister:
 
         cred_data = MagicMock()
         cred_data.credential_id = b"id"
+        cred_data.aaguid = MagicMock(__str__=lambda self: "2fc0579f-8113-47ea-b116-bb5a8db9202a")
         auth_data = MagicMock()
         auth_data.credential_data = cred_data
+        auth_data.is_backup_eligible.return_value = False
         server.register_complete.return_value = auth_data
 
         register(user_id=b"u", user_name="x")
@@ -209,6 +215,56 @@ class TestRegister:
             call_kwargs.kwargs.get("authenticator_attachment")
             == AuthenticatorAttachment.CROSS_PLATFORM
         )
+
+    @patch("uon.auth.fido_local._make_server")
+    @patch("uon.auth.fido_local._discover_client")
+    def test_backup_eligible_flag(
+        self, mock_discover: MagicMock, mock_server_fn: MagicMock
+    ) -> None:
+        mock_client = MagicMock()
+        mock_discover.return_value = mock_client
+        server = MagicMock()
+        mock_server_fn.return_value = server
+
+        server.register_begin.return_value = (
+            {"publicKey": {"challenge": b"c"}},
+            {"state": "s"},
+        )
+        mock_client.make_credential.return_value = MagicMock()
+
+        cred_data = MagicMock()
+        cred_data.credential_id = b"id"
+        cred_data.aaguid = MagicMock(__str__=lambda self: "2fc0579f-8113-47ea-b116-bb5a8db9202a")
+        auth_data = MagicMock()
+        auth_data.credential_data = cred_data
+        auth_data.is_backup_eligible.return_value = True
+        server.register_complete.return_value = auth_data
+
+        result = register(user_id=b"u", user_name="x")
+        assert result.backup_eligible is True
+
+    @patch("uon.auth.fido_local._make_server")
+    @patch("uon.auth.fido_local._discover_client")
+    def test_no_credential_data_raises(
+        self, mock_discover: MagicMock, mock_server_fn: MagicMock
+    ) -> None:
+        mock_client = MagicMock()
+        mock_discover.return_value = mock_client
+        server = MagicMock()
+        mock_server_fn.return_value = server
+
+        server.register_begin.return_value = (
+            {"publicKey": {"challenge": b"c"}},
+            {"state": "s"},
+        )
+        mock_client.make_credential.return_value = MagicMock()
+
+        auth_data = MagicMock()
+        auth_data.credential_data = None
+        server.register_complete.return_value = auth_data
+
+        with pytest.raises(RuntimeError, match="no credential data"):
+            register(user_id=b"u", user_name="x")
 
 
 # ── authenticate() ───────────────────────────────────────────────────
