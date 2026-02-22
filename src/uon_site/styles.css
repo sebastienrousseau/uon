@@ -145,16 +145,34 @@ nav {
   height: 100%;
 }
 
-.logo {
-  font-weight: 900;
-  font-size: 1.75rem;
-  letter-spacing: -0.06em;
-  color: var(--text-main);
+.logo-rune {
+  display: flex;
+  align-items: center;
   text-decoration: none;
 }
 
-.logo span {
-  color: var(--brand-color);
+.logo-rune svg {
+  width: 96px;
+  height: 96px;
+  fill: var(--text-main);
+  transition: transform 0.3s cubic-bezier(0.19, 1, 0.22, 1), fill 0.3s ease;
+}
+
+.logo-rune:hover svg {
+  fill: var(--brand-color);
+  transform: scale(1.05);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }
 
 .github-link svg {
