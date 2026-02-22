@@ -157,6 +157,35 @@
     </div>
   </footer>
 
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const startBtn = document.querySelector(".btn-primary");
+      const cliFallback = document.getElementById("cli-content");
+
+      startBtn.addEventListener("click", async (e) => {
+        e.preventDefault();
+
+        // 1. Transform the UI to terminal mode
+        startBtn.textContent = "Booting uon.core...";
+        startBtn.style.pointerEvents = "none";
+
+        try {
+          // 2. Dynamically import the Rust Wasm package (lazy load)
+          // Note: You will compile uon_core to a pkg/ folder next
+          const { init_terminal } = await import('./pkg/uon_core.js');
+
+          // 3. Mount the terminal and hide the hero
+          document.querySelector(".hero").style.display = "none";
+          cliFallback.style.display = "block";
+
+          await init_terminal("cli-content");
+        } catch (err) {
+          console.error("Wasm boot failed:", err);
+          startBtn.textContent = "Boot Failed. Check Console.";
+        }
+      });
+    });
+  </script>
 </body>
 
 </html>
