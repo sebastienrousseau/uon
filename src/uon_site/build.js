@@ -4,7 +4,8 @@ const path = require('path');
 // Target paths
 const SOURCE_HTML = path.join(__dirname, 'index.html');
 const SOURCE_CSS = path.join(__dirname, 'styles.css');
-const OUTPUT_HTML = path.join(__dirname, '../../index.html');
+const OUTPUT_DIR = path.join(__dirname, 'dist');
+const OUTPUT_HTML = path.join(__dirname, 'dist', 'index.html');
 
 console.log('🚀 Starting uon ultra-lightweight build...');
 
@@ -42,6 +43,11 @@ try {
 
   // Re-combine header and minified DOM
   const finalPayload = cliHeader + domBody;
+
+  // Ensure output directory exists
+  if (!fs.existsSync(OUTPUT_DIR)) {
+    fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+  }
 
   // Write out the single ~15KB output
   fs.writeFileSync(OUTPUT_HTML, finalPayload, 'utf8');

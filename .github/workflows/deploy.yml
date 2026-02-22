@@ -5,9 +5,9 @@ on:
     branches:
       - main
     paths:
-      - 'uon_site/src/index.html'
-      - 'uon_site/src/styles.css'
-      - 'uon_site/scripts/build.js'
+      - 'src/uon_site/index.html'
+      - 'src/uon_site/styles.css'
+      - 'src/uon_site/build.js'
   workflow_dispatch:
 
 permissions:
@@ -26,13 +26,13 @@ jobs:
           node-version: '20'
 
       - name: Build Static Site
-        run: cd uon_site && node scripts/build.js
+        run: cd src/uon_site && node build.js
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./uon_site
+          publish_dir: ./src/uon_site/dist
           publish_branch: gh-pages
           force_orphan: true
           # Only publish index.html
