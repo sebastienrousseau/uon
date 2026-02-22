@@ -3,7 +3,7 @@
 
 """Pre-execution static analysis for explainable blast radius via Textual UI.
 
-Employs the Model-Update-View event loop to interactively halt the terminal 
+Employs the Model-Update-View event loop to interactively halt the terminal
 and confirm the user accepts the semantic risk profile of the pending command.
 """
 
@@ -38,7 +38,9 @@ def evaluate_blast_radius(command: str) -> str:
         impacts: list[str] = []
 
         if any(p.search(command) for p in _HIGH_IMPACT_PATTERNS):
-            impacts.append("HIGH RISK: Destructive file mapping or permission alterations detected.")
+            impacts.append(
+                "HIGH RISK: Destructive file mapping or permission alterations detected."
+            )
 
         if any(p.search(command) for p in _NETWORK_PATTERNS):
             impacts.append("HIGH RISK: Arbitrary network execution piping detected.")
@@ -143,7 +145,7 @@ class BlastRadiusApp(App[bool]):
 
 def display_blast_radius(command: str) -> bool:
     """Interactively renders the blast radius and returns caller commitment.
-    
+
     If True, the caller envelopes the payload and transmits it over SSH.
     If False, the execution is entirely scrubbed before wrapping.
     """

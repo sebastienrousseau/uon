@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Sebastien Rousseau
-// Licensed under the MIT License.
+// Licensed under the GNU AGPLv3 License.
 
 //! Stateful process intervention via POSIX signals for CAEP compliance.
 //! 

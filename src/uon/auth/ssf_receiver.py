@@ -1,6 +1,6 @@
 # Copyright (c) 2026 Sebastien Rousseau
 #
-# Licensed under the MIT License. See LICENSE file in the project root
+# Licensed under the GNU AGPLv3 License. See LICENSE file in the project root
 # for full license information.
 
 """Shared Signals Framework (SSF) Receiver.
@@ -21,19 +21,22 @@ from pydantic import BaseModel
 
 app = FastAPI(title="uon_ssf_receiver", version="1.0.0")
 
+
 class SSFToken(BaseModel):
     iss: str
     iat: int
     jti: str
     events: dict[str, Any]
 
+
 # SSF standard URIs
 RISC_ACCOUNT_DISABLED = "https://schemas.openid.net/secevent/risc/event-type/account-disabled"
 RISC_CREDENTIAL_CHANGE = "https://schemas.openid.net/secevent/risc/event-type/credential-change"
 
+
 def kill_uon_sessions(subject_identifier: str) -> None:
     """Terminate all active uon processes associated with the revoked subject.
-    
+
     This fulfills the Zero-Trust Continuous Access Evaluation Protocol (CAEP)
     mandate of actively monitoring and instantly acting on downstream revocations.
     """
@@ -45,6 +48,7 @@ def kill_uon_sessions(subject_identifier: str) -> None:
         subprocess.run(pkill_cmd, check=False)  # noqa: S603
     except Exception as e:
         logging.error(f"Failed to terminate uon sessions: {e}")
+
 
 from uon import core  # type: ignore[import-untyped,import-not-found]
 

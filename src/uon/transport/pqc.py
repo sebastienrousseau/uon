@@ -1,12 +1,12 @@
 # Copyright (c) 2026 Sebastien Rousseau
 #
-# Licensed under the MIT License. See LICENSE file in the project root
+# Licensed under the GNU AGPLv3 License. See LICENSE file in the project root
 # for full license information.
 
 """Post-Quantum Cryptography (PQC) integration for uon transport.
 
 Wraps classical ECDH and Ed25519 signatures with ML-KEM (Kyber) and
-ML-DSA (Dilithium) standards to provide quantum-resistant forward 
+ML-DSA (Dilithium) standards to provide quantum-resistant forward
 secrecy over standard SSH layers.
 """
 
@@ -21,7 +21,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 class PQCHybridWrapper:
     """Quantum-resistant wrapper for the uon execution envelope.
-    
+
     This abstracts away the underlying liboqs primitives, allowing uon
     to inject a hybrid ML-KEM/X25519 key encapsulation into the payload
     before passing it to the Rust SSH layer.
@@ -34,7 +34,7 @@ class PQCHybridWrapper:
 
     def encapsulate_envelope(self, envelope_json: str) -> str:
         """Encrypt and authenticate the FIDO2 envelope using AES-256-GCM.
-        
+
         The encryption key is assumed to be derived from a quantum-secure
         Key Encapsulation Mechanism (KEM).
         """

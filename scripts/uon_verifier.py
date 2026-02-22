@@ -1,6 +1,6 @@
 # Copyright (c) 2026 Sebastien Rousseau
 #
-# Licensed under the MIT License. See LICENSE file in the project root
+# Licensed under the GNU AGPLv3 License. See LICENSE file in the project root
 # for full license information.
 
 #!/usr/bin/env python3
@@ -49,6 +49,7 @@ def verify_and_execute() -> None:
 
         # Phase 5 PQC Decapsulation (Hybrid wrapper)
         from uon.transport.pqc import PQCHybridWrapper
+
         pqc = PQCHybridWrapper()
         decoded_payload = pqc.decapsulate_envelope(encoded_payload)
 

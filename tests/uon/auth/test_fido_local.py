@@ -1,6 +1,6 @@
 # Copyright (c) 2026 Sebastien Rousseau
 #
-# Licensed under the MIT License. See LICENSE file in the project root
+# Licensed under the GNU AGPLv3 License. See LICENSE file in the project root
 # for full license information.
 
 """Tests for src.auth.fido_local — FIDO2 platform authenticator interactions."""

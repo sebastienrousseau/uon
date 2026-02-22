@@ -3,7 +3,7 @@
 
 """UX Orchestrator for handling CAEP Anomalies via Textual Overlays.
 
-Uses an Elm-inspired event loop to slide a CAEP Alert Modal over the 
+Uses an Elm-inspired event loop to slide a CAEP Alert Modal over the
 active terminal, demanding FIDO2 satisfaction to thaw the frozen PID.
 """
 
@@ -103,11 +103,11 @@ class CAEPInterventionApp(App[bool]):
 
 def handle_caep_anomaly(pid: int, anomaly_details: str) -> bool:
     """Intervenes upon a CAEP anomaly, freezing the process and demanding step-up auth.
-    
+
     Args:
         pid: The process ID of the active local or remote execution hook.
         anomaly_details: Contextual string detailing perceived threat.
-        
+
     Returns:
         True if the user successfully signs the step-up challenge, False otherwise.
     """

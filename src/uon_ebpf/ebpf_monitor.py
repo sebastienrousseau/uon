@@ -1,6 +1,6 @@
 # Copyright (c) 2026 Sebastien Rousseau
 #
-# Licensed under the MIT License. See LICENSE file in the project root
+# Licensed under the GNU AGPLv3 License. See LICENSE file in the project root
 # for full license information.
 
 """eBPF kernel-level execution monitoring.
@@ -18,6 +18,7 @@ import platform
 
 try:
     from bcc import BPF  # type: ignore
+
     HAS_BCC = True
 except ImportError:
     BPF = None  # type: ignore
@@ -35,15 +36,16 @@ BPF_HASH(authorized_pids, u32, u32);
 int restrict_execve(struct pt_regs *ctx, const char __user *filename) {
     u32 pid = bpf_get_current_pid_tgid() >> 32;
     u32 *is_auth = authorized_pids.lookup(&pid);
-    
+
     if (is_auth != NULL) {
-        // Enforce boundary: Kill process if it attempts recursive execve() 
+        // Enforce boundary: Kill process if it attempts recursive execve()
         // preventing shell breakouts from the JIT boundary.
         bpf_send_signal(9);
     }
     return 0;
 }
 """
+
 
 class KernelMonitor:
     """Manages the lifecycle of the eBPF sandboxing environment."""
@@ -55,7 +57,9 @@ class KernelMonitor:
     def attach(self) -> None:
         """Compile and attach the eBPF program to Linux kernel hooks."""
         if self._os != "Linux":
-            logging.warning("eBPF monitoring is only supported on Linux kernels. Bypassing sandbox.")
+            logging.warning(
+                "eBPF monitoring is only supported on Linux kernels. Bypassing sandbox."
+            )
             return
 
         if not HAS_BCC:

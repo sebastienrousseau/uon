@@ -1,6 +1,6 @@
 # Copyright (c) 2026 Sebastien Rousseau
 #
-# Licensed under the MIT License. See LICENSE file in the project root
+# Licensed under the GNU AGPLv3 License. See LICENSE file in the project root
 # for full license information.
 
 """Tests for the eBPF Kernel Execution Monitor."""
@@ -30,6 +30,7 @@ class TestKernelMonitor:
         finally:
             del sys.modules["bcc"]
             importlib.reload(em)
+
     @patch("uon_ebpf.ebpf_monitor.HAS_BCC", False)
     def test_attach_without_bcc(self) -> None:
         monitor = KernelMonitor()
@@ -57,7 +58,9 @@ class TestKernelMonitor:
         monitor._os = "Linux"
 
         monitor.attach()
-        mock_bpf.attach_kprobe.assert_called_once_with(event="sys_execve", fn_name="restrict_execve")
+        mock_bpf.attach_kprobe.assert_called_once_with(
+            event="sys_execve", fn_name="restrict_execve"
+        )
 
     @patch("uon_ebpf.ebpf_monitor.HAS_BCC", True)
     @patch("uon_ebpf.ebpf_monitor.BPF")

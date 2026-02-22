@@ -1,6 +1,6 @@
 # Copyright (c) 2024 Sebastien Rousseau
 #
-# Licensed under the MIT License. See LICENSE file in the project root
+# Licensed under the GNU AGPLv3 License. See LICENSE file in the project root
 # for full license information.
 
 """Paramiko-based SSH transport for FIDO2-signed command execution.
@@ -40,14 +40,13 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import json
 import os
 from dataclasses import dataclass
-from typing import Any
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from uon import core  # type: ignore[import-untyped,import-not-found]
+from uon.contracts.fido_dto import FidoAssertionDto, SecureEnvelopeDto
 
 # ---------------------------------------------------------------------------
 # Data containers
@@ -154,7 +153,7 @@ def execute_signed(
     port: int,
     username: str,
     command: str,
-    assertion: dict[str, Any],
+    assertion: FidoAssertionDto,
     challenge: ChallengePacket,
 ) -> ExecResult:
     """Execute a signed command on the remote target over SSH.
@@ -170,10 +169,9 @@ def execute_signed(
         port:      SSH port number.
         username:  Remote username.
         command:   The shell command to execute on the remote machine.
-        assertion: FIDO2 assertion dict with base64-encoded fields
-                   (``credentialId``, ``authenticatorData``,
-                   ``clientDataJSON``, ``signature``).  Produced by
-                   either the local authenticator or the QR bridge.
+        assertion: FIDO2 assertion DTO containing the hardware signature
+                   and authenticator data. Produced by the local authenticator
+                   or the QR bridge.
         challenge: The ``ChallengePacket`` whose ``nonce`` was signed
                    by the authenticator.
 
@@ -200,9 +198,7 @@ def execute_signed(
     wrapped_command = _wrap_command(envelope)
 
     try:
-        exit_code, stdout, stderr = core.execute_signed_rust(
-            host, port, username, wrapped_command
-        )
+        exit_code, stdout, stderr = core.execute_signed_rust(host, port, username, wrapped_command)
         return ExecResult(
             exit_code=exit_code,
             stdout=stdout,
@@ -219,9 +215,9 @@ def execute_signed(
 
 def _build_envelope(
     command: str,
-    assertion: dict[str, Any],
+    assertion: FidoAssertionDto,
     challenge: ChallengePacket,
-) -> dict[str, Any]:
+) -> SecureEnvelopeDto:
     """Bundle the command, assertion, and challenge into a versioned JSON envelope.
 
     The envelope is the atomic unit of trust in the uon protocol.  The
@@ -231,24 +227,25 @@ def _build_envelope(
 
     Args:
         command:   Shell command string.
-        assertion: Base64-encoded FIDO2 assertion fields.
+        assertion: The strictly validated `FidoAssertionDto`.
         challenge: The ``ChallengePacket`` whose nonce was signed.
 
     Returns:
-        A dict with keys ``version`` (``1``), ``command``,
-        ``challenge`` (base64), ``session_id`` (base64), and
-        ``assertion``.
+        A strictly validated `SecureEnvelopeDto` encapsulating the command and signature logic.
     """
-    return {
-        "version": 1,
-        "command": command,
-        "challenge": base64.b64encode(challenge.nonce).decode(),
-        "session_id": base64.b64encode(challenge.session_id).decode(),
-        "assertion": assertion,
-    }
+    # Parse shell command string into a POSIX array for the DTO
+    import shlex
+
+    command_array = shlex.split(command)
+
+    return SecureEnvelopeDto(
+        session_id=base64.b64encode(challenge.session_id).decode(),
+        command=command_array,
+        assertion=assertion,
+    )
 
 
-def _wrap_command(envelope: dict[str, Any]) -> str:
+def _wrap_command(envelope: SecureEnvelopeDto) -> str:
     """Encode the envelope as a single shell-safe command string.
 
     Compact-JSON-encodes the envelope, base64-encodes the result, and
@@ -264,14 +261,14 @@ def _wrap_command(envelope: dict[str, Any]) -> str:
     the FIDO2 assertion, and only then ``exec``'s the inner command.
 
     Args:
-        envelope: The dict produced by ``_build_envelope()``.
+        envelope: The strictly validated `SecureEnvelopeDto` produced by ``_build_envelope()``.
 
     Returns:
         A string in the format ``"__UON_EXEC__ <base64>"``.
     """
     from uon.transport.pqc import PQCHybridWrapper
 
-    payload_json = json.dumps(envelope, separators=(",", ":"))
+    payload_json = envelope.model_dump_json(exclude_none=True)
     pqc = PQCHybridWrapper()
     crypto_payload = pqc.encapsulate_envelope(payload_json)
 

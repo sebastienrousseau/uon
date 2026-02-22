@@ -20,6 +20,7 @@ from textual.widgets import Label, ProgressBar, Static
 
 class TelemetryState:
     """The Model representing the active JIT envelope."""
+
     def __init__(self, timeout: int, elapsed: float = 0.0, desync: bool = False):
         self.timeout = timeout
         self.elapsed = elapsed
@@ -87,7 +88,7 @@ class JITTelemetryApp(App[None]):
             if not asyncio.run(self._check_socket_health(self.socket_path)):
                 self.call_from_thread(self._handle_desync)
                 # Give the user brief time to read the error before tearing down
-                time.sleep(2) 
+                time.sleep(2)
                 self.call_from_thread(self.exit)
                 return
 

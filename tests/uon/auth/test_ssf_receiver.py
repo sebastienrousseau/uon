@@ -1,6 +1,6 @@
 # Copyright (c) 2026 Sebastien Rousseau
 #
-# Licensed under the MIT License. See LICENSE file in the project root
+# Licensed under the GNU AGPLv3 License. See LICENSE file in the project root
 # for full license information.
 
 """Tests for the Shared Signals Framework (SSF) Receiver."""
@@ -29,12 +29,9 @@ class TestSSFReceiver:
             "jti": "jti123456",
             "events": {
                 RISC_ACCOUNT_DISABLED: {
-                    "subject": {
-                        "format": "email",
-                        "email": "admin@example.com"
-                    }
+                    "subject": {"format": "email", "email": "admin@example.com"}
                 }
-            }
+            },
         }
         response = client.post("/ssf/events", json=payload)
         assert response.status_code == 200
@@ -52,9 +49,7 @@ class TestSSFReceiver:
             "iss": "https://idp.example.com/",
             "iat": 1600000000,
             "jti": "jti123456",
-            "events": {
-                "https://schemas.openid.net/secevent/risc/event-type/account-enabled": {}
-            }
+            "events": {"https://schemas.openid.net/secevent/risc/event-type/account-enabled": {}},
         }
         response = client.post("/ssf/events", json=payload)
         assert response.status_code == 200
@@ -92,13 +87,8 @@ class TestSSFReceiver:
             "iat": 1600000000,
             "jti": "jti123456",
             "events": {
-                RISC_ACCOUNT_DISABLED: {
-                    "subject": {
-                        "format": "email",
-                        "email": "user@example.com"
-                    }
-                }
-            }
+                RISC_ACCOUNT_DISABLED: {"subject": {"format": "email", "email": "user@example.com"}}
+            },
         }
         # The exception is caught and logged, so the endpoint should still return 200
         response = client.post("/ssf/events", json=payload)

@@ -1,6 +1,6 @@
 # Copyright (c) 2026 Sebastien Rousseau
 #
-# Licensed under the MIT License. See LICENSE file in the project root
+# Licensed under the GNU AGPLv3 License. See LICENSE file in the project root
 # for full license information.
 
 """Tests for src.transport.ssh_client — challenge generation, envelope, SSH exec."""
@@ -82,27 +82,25 @@ class TestRequestChallenge:
         assert len(cp.nonce) == 32
 
 
-
-
-
 # ── _build_envelope() ────────────────────────────────────────────────
 
 
 class TestBuildEnvelope:
     def test_structure(self) -> None:
+        from uon.contracts.fido_dto import FidoAssertionDto
         challenge = ChallengePacket(nonce=b"\x01" * 32, session_id=b"\x02" * 32)
-        env = _build_envelope("ls", {"sig": "abc"}, challenge)
-        assert env["version"] == 1
-        assert env["command"] == "ls"
-        assert env["assertion"] == {"sig": "abc"}
-        assert "challenge" in env
-        assert "session_id" in env
+        assertion = FidoAssertionDto(credential_id=b"cid", client_data=b"cd", auth_data=b"ad", signature=b"sig")
+        env = _build_envelope("ls -la", assertion, challenge)
+        assert env.session_id == base64.b64encode(challenge.session_id).decode()
+        assert env.command == ["ls", "-la"]
+        assert env.assertion == assertion
 
     def test_base64_encoding(self) -> None:
+        from uon.contracts.fido_dto import FidoAssertionDto
         challenge = ChallengePacket(nonce=b"\xff" * 4, session_id=b"\xaa" * 4)
-        env = _build_envelope("cmd", {}, challenge)
-        assert base64.b64decode(env["challenge"]) == b"\xff" * 4
-        assert base64.b64decode(env["session_id"]) == b"\xaa" * 4
+        assertion = FidoAssertionDto(credential_id=b"cid", client_data=b"cd", auth_data=b"ad", signature=b"sig")
+        env = _build_envelope("cmd", assertion, challenge)
+        assert base64.b64decode(env.session_id) == b"\xaa" * 4
 
 
 # ── _wrap_command() ──────────────────────────────────────────────────
@@ -110,17 +108,22 @@ class TestBuildEnvelope:
 
 class TestWrapCommand:
     def test_prefix(self) -> None:
-        wrapped = _wrap_command({"hello": "world"})
+        from uon.contracts.fido_dto import FidoAssertionDto, SecureEnvelopeDto
+        assertion = FidoAssertionDto(credential_id=b"c", client_data=b"c", auth_data=b"a", signature=b"s")
+        envelope = SecureEnvelopeDto(session_id="si", command=["hello", "world"], assertion=assertion)
+        wrapped = _wrap_command(envelope)
         assert wrapped.startswith("__UON_EXEC__ ")
 
     @patch("uon.transport.pqc.os.urandom")
     def test_decodable_payload(self, mock_urandom: MagicMock) -> None:
+        from uon.contracts.fido_dto import FidoAssertionDto, SecureEnvelopeDto
         from uon.transport.pqc import PQCHybridWrapper
 
         # Ensure the random KEM seed and nonce are identical for both wrapper instances
         mock_urandom.side_effect = lambda n: b"\x00" * n
 
-        envelope = {"command": "uptime", "version": 1}
+        assertion = FidoAssertionDto(credential_id=b"c", client_data=b"c", auth_data=b"a", signature=b"s")
+        envelope = SecureEnvelopeDto(session_id="si", command=["uptime"], assertion=assertion)
         wrapped = _wrap_command(envelope)
         b64_part = wrapped.split(" ", 1)[1]
 
@@ -128,7 +131,7 @@ class TestWrapCommand:
         decoded_string = pqc.decapsulate_envelope(b64_part)
         decoded = json.loads(decoded_string)
 
-        assert decoded["command"] == "uptime"
+        assert decoded["command"] == ["uptime"]
 
 
 # ── execute_signed() ─────────────────────────────────────────────────
@@ -137,9 +140,11 @@ class TestWrapCommand:
 class TestExecuteSigned:
     @patch("uon.transport.ssh_client.core.execute_signed_rust")
     def test_success(self, mock_rust: MagicMock) -> None:
+        from uon.contracts.fido_dto import FidoAssertionDto
         mock_rust.return_value = (0, "result\n", "")
         challenge = ChallengePacket(nonce=b"\x00" * 32, session_id=b"\x00" * 32)
-        result = execute_signed("h", 22, "root", "ls", {"s": "1"}, challenge)
+        assertion = FidoAssertionDto(credential_id=b"cid", client_data=b"cd", auth_data=b"ad", signature=b"sig")
+        result = execute_signed("h", 22, "root", "ls", assertion, challenge)
 
         assert result.exit_code == 0
         assert result.stdout == "result\n"
@@ -147,10 +152,12 @@ class TestExecuteSigned:
 
     @patch("uon.transport.ssh_client.core.execute_signed_rust")
     def test_close_on_error(self, mock_rust: MagicMock) -> None:
+        from uon.contracts.fido_dto import FidoAssertionDto
         mock_rust.side_effect = Exception("refused")
         challenge = ChallengePacket(nonce=b"\x00" * 32, session_id=b"\x00" * 32)
+        assertion = FidoAssertionDto(credential_id=b"cid", client_data=b"cd", auth_data=b"ad", signature=b"sig")
         with pytest.raises(OSError, match="SSH execution failed: refused"):
-            execute_signed("h", 22, "root", "ls", {}, challenge)
+            execute_signed("h", 22, "root", "ls", assertion, challenge)
         mock_rust.assert_called_once()
 
 
