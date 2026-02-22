@@ -1,3 +1,8 @@
+# Copyright (c) 2024 Sebastien Rousseau
+#
+# Licensed under the MIT License. See LICENSE file in the project root
+# for full license information.
+
 """Local configuration and target management.
 
 Persists known remote targets as a JSON array in a platform-appropriate
@@ -63,11 +68,43 @@ TARGETS_FILE: Path = CONFIG_DIR / "targets.json"
 
 
 @dataclass(slots=True)
+class Credential:
+    """A single FIDO2 credential enrolled for a target.
+
+    Attributes:
+        id:     Base64-encoded FIDO2 credential ID.
+        aaguid: UUID-formatted AAGUID of the authenticator that created
+                this credential.  Defaults to the all-zeros UUID (unknown).
+    """
+
+    id: str
+    aaguid: str = "00000000-0000-0000-0000-000000000000"
+
+    @classmethod
+    def from_dict(cls, data: dict[str, object] | str) -> Self:
+        """Deserialise a ``Credential`` from a dict or legacy bare string.
+
+        Args:
+            data: Either a dict with ``"id"`` (and optional ``"aaguid"``)
+                or a plain string (legacy format containing only the ID).
+
+        Returns:
+            A fully-initialised ``Credential`` instance.
+        """
+        if isinstance(data, str):
+            return cls(id=data)
+        return cls(
+            id=str(data["id"]),
+            aaguid=str(data.get("aaguid", "00000000-0000-0000-0000-000000000000")),
+        )
+
+
+@dataclass(slots=True)
 class Target:
     """A remote machine that uon can reach.
 
     Each ``Target`` maps a human-friendly *alias* to SSH coordinates and
-    an optional list of FIDO2 credential IDs enrolled for that machine.
+    an optional list of FIDO2 credentials enrolled for that machine.
     Credential IDs are base64-encoded public identifiers -- they do not
     contain secret key material.
 
@@ -76,22 +113,27 @@ class Target:
         host:  IPv4 address or hostname of the target.
         port:  SSH port (default ``22``).
         user:  Remote username (default ``"root"``).
-        credential_ids: Base64-encoded FIDO2 credential IDs enrolled
-            via ``uon register``.  Empty until first enrollment.
+        credentials: FIDO2 credentials enrolled via ``uon register``.
+            Empty until first enrollment.
     """
 
     alias: str
     host: str
     port: int = 22
     user: str = "root"
-    credential_ids: list[str] = field(default_factory=list)
+    credentials: list[Credential] = field(default_factory=list)
+
+    @property
+    def credential_ids(self) -> list[str]:
+        """Return base64-encoded credential IDs for backward compatibility."""
+        return [c.id for c in self.credentials]
 
     @classmethod
     def from_dict(cls, data: dict[str, object]) -> Self:
         """Deserialise a ``Target`` from a plain dict (e.g. parsed JSON).
 
-        Missing optional keys fall back to their dataclass defaults
-        (``port=22``, ``user="root"``, ``credential_ids=[]``).
+        Handles both the new ``"credentials"`` key (list of dicts) and
+        the legacy ``"credential_ids"`` key (list of bare strings).
 
         Args:
             data: Dictionary with at least ``"alias"`` and ``"host"``
@@ -100,12 +142,23 @@ class Target:
         Returns:
             A fully-initialised ``Target`` instance.
         """
+        raw_creds: list[object] = []
+        if "credentials" in data:
+            raw_creds = list(data["credentials"])  # type: ignore[call-overload]
+        elif "credential_ids" in data:
+            raw_creds = list(data["credential_ids"])  # type: ignore[call-overload]
+
+        credentials = [
+            Credential.from_dict(c)  # type: ignore[arg-type]
+            for c in raw_creds
+        ]
+
         return cls(
             alias=str(data["alias"]),
             host=str(data["host"]),
-            port=int(data.get("port", 22)),  # type: ignore[arg-type]
+            port=int(data.get("port", 22)),  # type: ignore[call-overload]
             user=str(data.get("user", "root")),
-            credential_ids=[str(c) for c in data.get("credential_ids", [])],  # type: ignore[union-attr]
+            credentials=credentials,
         )
 
 

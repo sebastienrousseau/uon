@@ -1,3 +1,8 @@
+# Copyright (c) 2024 Sebastien Rousseau
+#
+# Licensed under the MIT License. See LICENSE file in the project root
+# for full license information.
+
 """CLI entry point for uon -- FIDO2-signed remote terminal execution.
 
 This module wires together every uon subsystem into a Click-based command
@@ -52,7 +57,8 @@ from uon.auth.fido_local import (
 )
 from uon.auth.qr_bridge import request_signature_via_qr
 from uon.transport.ssh_client import ExecResult, execute_signed, request_challenge
-from uon.utils.config import Target, TargetStore
+from uon.utils.config import Credential, Target, TargetStore
+from uon.utils.policy import PolicyStore, is_valid_aaguid
 
 # ---------------------------------------------------------------------------
 # CLI group
@@ -150,13 +156,17 @@ def register(alias: str, user_name: str | None) -> None:
     resident-key credential inside the hardware Secure Enclave, and
     records the base64-encoded credential ID in the ``TargetStore``.
 
+    When an AAGUID policy is enforcing, the credential's AAGUID and
+    backup-eligibility flag are validated before storage.
+
     After enrollment you must install the corresponding public key on
     the target machine (e.g. via ``scripts/setup_uon.py`` and
     ``scp``).
 
     Raises:
-        SystemExit(1): If the target alias is unknown or no FIDO2
-            authenticator is available.
+        SystemExit(1): If the target alias is unknown, no FIDO2
+            authenticator is available, or the policy rejects the
+            credential.
     """
     store = TargetStore()
     target = store.get(alias)
@@ -171,7 +181,7 @@ def register(alias: str, user_name: str | None) -> None:
     click.echo("You may be prompted for biometric verification.\n")
 
     try:
-        _attestation, credential_id = fido_register(
+        result = fido_register(
             user_id=user_id,
             user_name=display_name,
         )
@@ -179,17 +189,78 @@ def register(alias: str, user_name: str | None) -> None:
         click.echo(f"Error: {exc}", err=True)
         raise SystemExit(1) from exc
 
-    cred_id_b64 = base64.b64encode(credential_id).decode()
-    target.credential_ids.append(cred_id_b64)
+    policy = PolicyStore()
+    rejection = policy.check_credential(result.aaguid, result.backup_eligible)
+    if rejection is not None:
+        click.echo(rejection, err=True)
+        raise SystemExit(1)
+
+    cred_id_b64 = base64.b64encode(result.credential_id).decode()
+    credential = Credential(id=cred_id_b64, aaguid=result.aaguid)
+    target.credentials.append(credential)
     store.add(target)
 
-    click.echo(f"\nCredential registered (ID: {cred_id_b64[:16]}…).")
+    click.echo(f"\nCredential registered (ID: {cred_id_b64[:16]}…, AAGUID: {result.aaguid}).")
     click.echo(
         "\nInstall the public key on the target by appending it to "
         "~/.ssh/authorized_keys on the remote machine."
     )
-    # In a full implementation we would also print the SSH-compatible
-    # public key blob here.
+
+
+# ---------------------------------------------------------------------------
+# Policy subcommands
+# ---------------------------------------------------------------------------
+
+
+@main.group()
+def policy() -> None:
+    """Manage the AAGUID attestation policy."""
+
+
+@policy.command(name="show")
+def policy_show() -> None:
+    """Display the current AAGUID policy state and listed AAGUIDs."""
+    ps = PolicyStore()
+    if not ps.is_enforcing:
+        click.echo("Policy: OPEN (all authenticators allowed)")
+        return
+    click.echo("Policy: ENFORCING")
+    for aaguid in ps.list_aaguids():
+        click.echo(f"  {aaguid}")
+
+
+@policy.command(name="add")
+@click.argument("aaguid")
+def policy_add(aaguid: str) -> None:
+    """Add an AAGUID to the attestation allowlist."""
+    if not is_valid_aaguid(aaguid):
+        click.echo(f"Invalid AAGUID format: {aaguid}", err=True)
+        raise SystemExit(1)
+    ps = PolicyStore()
+    if ps.add(aaguid):
+        click.echo(f"Added {aaguid.lower()} to policy.")
+    else:
+        click.echo(f"AAGUID {aaguid.lower()} is already in the policy.")
+
+
+@policy.command(name="remove")
+@click.argument("aaguid")
+def policy_remove(aaguid: str) -> None:
+    """Remove an AAGUID from the attestation allowlist."""
+    ps = PolicyStore()
+    if ps.remove(aaguid):
+        click.echo(f"Removed {aaguid.lower()} from policy.")
+    else:
+        click.echo(f"AAGUID {aaguid.lower()} not found in policy.", err=True)
+        raise SystemExit(1)
+
+
+@policy.command(name="clear")
+def policy_clear() -> None:
+    """Remove all AAGUIDs from the attestation policy."""
+    ps = PolicyStore()
+    count = ps.clear()
+    click.echo(f"Cleared {count} AAGUID(s) from policy.")
 
 
 # ---------------------------------------------------------------------------
@@ -308,7 +379,7 @@ def _resolve_signature(
             credential_ids=credential_ids,
         )
         return {
-            "credentialId": base64.b64encode(response.credential_id).decode(),
+            "credentialId": base64.b64encode(response.credential_id).decode(),  # type: ignore[attr-defined]
             "authenticatorData": base64.b64encode(response.authenticator_data).decode(),
             "clientDataJSON": base64.b64encode(response.client_data).decode(),
             "signature": base64.b64encode(response.signature).decode(),

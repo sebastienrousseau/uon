@@ -1,3 +1,8 @@
+# Copyright (c) 2024 Sebastien Rousseau
+#
+# Licensed under the MIT License. See LICENSE file in the project root
+# for full license information.
+
 """SSH transport layer for signed-payload execution.
 
 This package handles every network operation between your machine and the

@@ -1,3 +1,8 @@
+# Copyright (c) 2024 Sebastien Rousseau
+#
+# Licensed under the MIT License. See LICENSE file in the project root
+# for full license information.
+
 """Platform-local FIDO2 biometric signing (Touch ID / Windows Hello / USB key).
 
 You use this module to create and exercise FIDO2 resident-key credentials
@@ -45,7 +50,7 @@ from __future__ import annotations
 
 import platform
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 from fido2.client import Fido2Client, UserInteraction
 from fido2.hid import CtapHidDevice
@@ -62,7 +67,7 @@ from fido2.webauthn import (
 )
 
 if TYPE_CHECKING:
-    from fido2.webauthn import AttestationObject, AuthenticatorAssertionResponse
+    from fido2.webauthn import AuthenticatorAssertionResponse, AuthenticatorData
 
 
 # ---------------------------------------------------------------------------
@@ -146,17 +151,17 @@ def _discover_client(rp_id: str) -> Fido2Client:
     # -- macOS platform authenticator (Touch ID) --
     if sys.platform == "darwin":
         try:
-            from fido2.client import MacOSClient  # type: ignore[attr-error]
+            from fido2.client import MacOSClient  # type: ignore[attr-defined]
 
             client = MacOSClient(origin, interaction=interaction)
-            return client
+            return client  # type: ignore[no-any-return]
         except Exception:  # noqa: S110 — intentional silent fallthrough to HID
             pass
 
     # -- Windows Hello --
     if sys.platform == "win32":
         try:
-            from fido2.client import WindowsClient  # type: ignore[attr-error]
+            from fido2.client import WindowsClient  # type: ignore[attr-defined]
 
             if WindowsClient.is_available():
                 client = WindowsClient(origin, interaction=interaction)
@@ -169,8 +174,8 @@ def _discover_client(rp_id: str) -> Fido2Client:
     if devices:
         return Fido2Client(
             devices[0],
-            origin,
-            interaction=interaction,
+            origin,  # type: ignore[arg-type]
+            interaction=interaction,  # type: ignore[call-arg]
         )
 
     raise NoPlatformAuthenticatorError(
@@ -204,17 +209,34 @@ def _make_server() -> Fido2Server:
     return Fido2Server(_make_rp())
 
 
+class RegistrationResult(NamedTuple):
+    """Rich return type from ``register()`` with attestation metadata.
+
+    Attributes:
+        auth_data:       The ``AuthenticatorData`` returned by the server.
+        credential_id:   Raw credential ID bytes.
+        aaguid:          UUID-formatted string identifying the authenticator model.
+        backup_eligible: Whether the credential is flagged as backup-eligible
+                         (i.e. a synced passkey).
+    """
+
+    auth_data: AuthenticatorData
+    credential_id: bytes
+    aaguid: str
+    backup_eligible: bool
+
+
 def register(
     user_id: bytes,
     user_name: str,
     rp_id: str = RP_ID,
-) -> tuple[AttestationObject, bytes]:
+) -> RegistrationResult:
     """Create a new FIDO2 resident-key credential inside the hardware enclave.
 
     Triggers a biometric prompt (Touch ID / Windows Hello / USB key tap),
     generates a resident key inside the authenticator's Secure Enclave,
-    and returns the attestation object containing the public key that you
-    must install on the target machine.
+    and returns a ``RegistrationResult`` containing the authenticator
+    data, credential ID, AAGUID, and backup-eligibility flag.
 
     Args:
         user_id:   Opaque identifier for the user (typically 32 bytes
@@ -225,11 +247,8 @@ def register(
                    ``"uon.local"``).
 
     Returns:
-        A 2-tuple ``(attestation_object, credential_id)`` where:
-
-        * ``attestation_object`` contains the COSE public key.
-        * ``credential_id`` is the raw bytes you base64-encode and store
-          in the ``TargetStore``.
+        A ``RegistrationResult`` with ``auth_data``, ``credential_id``,
+        ``aaguid``, and ``backup_eligible``.
 
     Raises:
         NoPlatformAuthenticatorError: If no usable authenticator is
@@ -258,7 +277,7 @@ def register(
         else AuthenticatorAttachment.PLATFORM,
         resident_key_requirement=ResidentKeyRequirement.REQUIRED,
         user_verification=UserVerificationRequirement.REQUIRED,
-        attestation=AttestationConveyancePreference.DIRECT,
+        attestation=AttestationConveyancePreference.DIRECT,  # type: ignore[call-arg]
     )
 
     attestation_response = client.make_credential(create_options["publicKey"])
@@ -267,8 +286,15 @@ def register(
         attestation_response,
     )
 
-    credential_id = auth_data.credential_data.credential_id  # type: ignore[union-attr]
-    return auth_data, credential_id
+    credential_data = auth_data.credential_data
+    if credential_data is None:
+        raise RuntimeError("Authenticator returned no credential data.")
+
+    credential_id = credential_data.credential_id
+    aaguid = str(credential_data.aaguid)
+    backup_eligible = auth_data.is_backup_eligible()
+
+    return RegistrationResult(auth_data, credential_id, aaguid, backup_eligible)
 
 
 def authenticate(
@@ -329,8 +355,8 @@ def authenticate(
     # the target can verify the signature against the challenge it issued.
     options_dict = dict(request_options["publicKey"])
     options_dict["challenge"] = challenge
-    request_options = {"publicKey": options_dict}
+    request_options = {"publicKey": options_dict}  # type: ignore[assignment]
 
     assertion_response = client.get_assertion(request_options["publicKey"])
     # Return the first assertion (single authenticator expected).
-    return assertion_response.get_response(0)
+    return assertion_response.get_response(0)  # type: ignore[return-value]

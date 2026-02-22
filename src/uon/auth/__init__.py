@@ -1,3 +1,8 @@
+# Copyright (c) 2024 Sebastien Rousseau
+#
+# Licensed under the MIT License. See LICENSE file in the project root
+# for full license information.
+
 """Authentication subsystem -- FIDO2 local biometric + QR bridge fallback.
 
 This package owns the entire FIDO2 signing lifecycle.  You interact with

@@ -1,3 +1,8 @@
+# Copyright (c) 2024 Sebastien Rousseau
+#
+# Licensed under the MIT License. See LICENSE file in the project root
+# for full license information.
+
 """uon -- FIDO2-signed remote terminal execution.
 
 You use uon to run shell commands on remote machines where every invocation

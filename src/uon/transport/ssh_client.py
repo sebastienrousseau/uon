@@ -1,3 +1,8 @@
+# Copyright (c) 2024 Sebastien Rousseau
+#
+# Licensed under the MIT License. See LICENSE file in the project root
+# for full license information.
+
 """Paramiko-based SSH transport for FIDO2-signed command execution.
 
 You use this module to move a cryptographically signed command from your
@@ -40,7 +45,7 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
-import paramiko
+import paramiko  # type: ignore[import-untyped]
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 # ---------------------------------------------------------------------------
