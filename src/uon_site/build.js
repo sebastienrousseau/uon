@@ -4,8 +4,10 @@ const path = require('path');
 // Target paths
 const SOURCE_HTML = path.join(__dirname, 'index.html');
 const SOURCE_CSS = path.join(__dirname, 'styles.css');
+const SOURCE_FAVICON = path.join(__dirname, 'noun-rune-3458897.png');
 const OUTPUT_DIR = path.join(__dirname, 'dist');
 const OUTPUT_HTML = path.join(__dirname, 'dist', 'index.html');
+const OUTPUT_FAVICON = path.join(__dirname, 'dist', 'favicon.png');
 
 console.log('🚀 Starting uon ultra-lightweight build...');
 
@@ -51,6 +53,11 @@ try {
 
   // Write out the single ~15KB output
   fs.writeFileSync(OUTPUT_HTML, finalPayload, 'utf8');
+
+  // Copy favicon
+  if (fs.existsSync(SOURCE_FAVICON)) {
+    fs.copyFileSync(SOURCE_FAVICON, OUTPUT_FAVICON);
+  }
 
   // Validate payload size
   const stats = fs.statSync(OUTPUT_HTML);
