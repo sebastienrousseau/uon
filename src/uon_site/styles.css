@@ -69,9 +69,10 @@ body {
 }
 
 :focus-visible {
-  outline: 3px solid var(--brand-color);
-  outline-offset: 4px;
-  border-radius: 4px;
+  outline: 3px solid var(--brand-color) !important;
+  outline-offset: 4px !important;
+  border-radius: 8px !important;
+  box-shadow: 0 0 0 8px var(--blob-glow) !important;
 }
 
 .skip-link {
@@ -387,6 +388,146 @@ nav {
   font-size: 1.125rem;
   max-width: 480px;
   line-height: 1.6;
+}
+
+/* --- 8. Articles Section --- */
+.articles-section {
+  padding-bottom: 120px;
+}
+
+.section-title {
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  margin: 0;
+}
+
+.articles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 24px;
+}
+
+.article-card {
+  padding: 32px;
+  justify-content: flex-start;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.article-card .tag {
+  background: rgba(154, 171, 0, 0.1);
+  color: var(--brand-color);
+  padding: 6px 12px;
+  border-radius: 12px;
+  font-size: 0.875rem;
+  font-weight: 800;
+  display: inline-block;
+}
+
+@media (prefers-color-scheme: dark) {
+  .article-card .tag {
+    background: rgba(223, 255, 0, 0.1);
+  }
+}
+
+.article-card h3 {
+  font-size: 1.5rem;
+  margin: 0;
+  line-height: 1.2;
+}
+
+/* --- 9. FAQ Section --- */
+.faq-section {
+  padding-bottom: 120px;
+}
+
+.faq-section .section-title {
+  margin-bottom: 48px;
+}
+
+.faq-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.faq-item {
+  background: var(--card-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 24px;
+  overflow: hidden;
+  transition: border-color 0.3s ease;
+}
+
+.faq-item:hover {
+  border-color: var(--brand-color);
+}
+
+.faq-item summary {
+  padding: 24px 32px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+  /* Hide default arrow */
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.faq-item summary::after {
+  content: "+";
+  font-size: 1.5rem;
+  color: var(--brand-color);
+  transition: transform 0.3s;
+}
+
+.faq-item[open] summary::after {
+  transform: rotate(45deg);
+}
+
+.faq-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.faq-content {
+  padding: 0 32px 32px;
+  color: var(--text-muted);
+  font-size: 1.125rem;
+  line-height: 1.6;
+}
+
+/* --- 10. Download Call to Action --- */
+.download-section {
+  padding: 80px 40px;
+  margin-bottom: 120px;
+  background: var(--card-bg);
+  border-radius: 40px;
+  border: 1px solid var(--brand-color);
+  box-shadow: 0 0 60px var(--blob-glow);
+}
+
+.download-section h2 {
+  font-size: clamp(2.5rem, 5vw, 4rem);
+  font-weight: 900;
+  color: var(--text-main);
+  margin: 0 0 16px 0;
+  letter-spacing: -0.04em;
+}
+
+.download-section p {
+  font-size: 1.25rem;
+  color: var(--text-muted);
+  max-width: 600px;
+  margin: 0 auto;
+  font-weight: 500;
+}
+
+.cursor-pointer {
+  cursor: pointer;
 }
 
 /* --- CLI Content Fallback --- */

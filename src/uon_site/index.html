@@ -174,6 +174,74 @@
 
     </section>
 
+    <section id="articles" class="container articles-section" aria-label="Articles and Deep Dives">
+      <div class="flex items-center justify-between mb-8">
+        <h2 class="section-title">Articles &amp; Deep Dives</h2>
+      </div>
+      <div class="articles-grid">
+        <article class="card article-card cursor-pointer">
+          <span class="tag">Architecture</span>
+          <h3>The Death of Passwords in SSH</h3>
+          <p>Why legacy asymmetric key pairs are failing corporate compliance and how mathematically proven FIDO2
+            Enclaves are replacing them.</p>
+        </article>
+        <article class="card article-card cursor-pointer">
+          <span class="tag">Security</span>
+          <h3>Zero Standing Privilege (ZSP) Explained</h3>
+          <p>Understanding how JIT privilege escalation via ephemeral sandbox execution profiles secures critical
+            infrastructure.</p>
+        </article>
+        <article class="card article-card cursor-pointer">
+          <span class="tag">Cryptography</span>
+          <h3>Post-Quantum Terminals</h3>
+          <p>Integrating ML-DSA hybrids and strict SNTRUP exchanges directly over AF_VSOCK native bindings in
+            memory-safe PyO3 Rust.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="faq" class="container faq-section" aria-label="Frequently Asked Questions">
+      <h2 class="section-title text-center">Frequently Asked Questions</h2>
+      <div class="faq-grid">
+        <details class="faq-item">
+          <summary>How does uon secure terminal execution?</summary>
+          <div class="faq-content">
+            <p>uon utilizes aggressive hardware attestation via FIDO2 passkeys anchored to your device's Secure Enclave.
+              This eliminates the risk of stolen SSH keys, instantly blocking relay attacks and unauthorized pivoting
+              via CAEP integration and eBPF kernel enforcement.</p>
+          </div>
+        </details>
+        <details class="faq-item">
+          <summary>What is Zero Standing Privilege (ZSP)?</summary>
+          <div class="faq-content">
+            <p>ZSP ensures that no user has persistent access to the target machine. uon intercepts the connection
+              request, evaluates the FIDO2 signature, and dynamically spawns an ephemeral <code>uon-exec</code> Linux
+              group specifically for that session, tearing it down immediately after termination.</p>
+          </div>
+        </details>
+        <details class="faq-item">
+          <summary>Which operating systems are supported?</summary>
+          <div class="faq-content">
+            <p>The core terminal execution pipeline is inherently cross-platform, offering native deployment target
+              support for macOS (utilizing EndpointSecurity frameworks), Linux (utilizing eBPF tracepoints), and Windows
+              Subsystem for Linux natively over AF_VSOCK streams without fragile TCP emulation.</p>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <section id="download" class="container download-section text-center" aria-label="Download uon">
+      <h2>Ready to seal your infrastructure?</h2>
+      <p>Available as a zero-dependency Rust PyO3 binary distribution targeting macOS, Linux, and Windows Subsystem for
+        Linux architectures.</p>
+      <div class="flex gap-4 justify-center mt-8 download-cta">
+        <a href="https://github.com/sebastienrousseau/uon/releases" class="btn btn-primary"
+          aria-label="Download uon for your architecture">Download uon Core</a>
+        <a href="https://github.com/sebastienrousseau/uon#documentation" class="btn btn-secondary"
+          aria-label="Read the Installation Guide">View Documentation</a>
+      </div>
+    </section>
+
   </main>
 
   <footer>
@@ -192,19 +260,13 @@
       startBtn.addEventListener("click", async (e) => {
         e.preventDefault();
 
-        // 1. Transform the UI to terminal mode
         startBtn.textContent = "Booting uon.core...";
         startBtn.style.pointerEvents = "none";
 
         try {
-          // 2. Dynamically import the Rust Wasm package (lazy load)
-          // Note: You will compile uon_core to a pkg/ folder next
           const { init_terminal } = await import('./pkg/uon_core.js');
-
-          // 3. Mount the terminal and hide the hero
           document.querySelector(".hero").style.display = "none";
           cliFallback.style.display = "block";
-
           await init_terminal("cli-content");
         } catch (err) {
           console.error("Wasm boot failed:", err);
@@ -212,7 +274,6 @@
         }
       });
 
-      // Theme logic execution
       const themeBtn = document.getElementById("theme-toggle");
       const iconSun = document.getElementById("icon-sun");
       const iconMoon = document.getElementById("icon-moon");
