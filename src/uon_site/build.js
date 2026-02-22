@@ -12,47 +12,51 @@ const OUTPUT_FAVICON = path.join(__dirname, 'dist', 'favicon.png');
 console.log('🚀 Starting uon ultra-lightweight build...');
 
 try {
-  // Read inputs
-  let htmlContent = fs.readFileSync(SOURCE_HTML, 'utf8');
+  // Minify CSS
   let cssContent = fs.readFileSync(SOURCE_CSS, 'utf8');
-
-  // Minify CSS (Simple Regex Minifier for Zero-Dependencies)
-  // 1. Remove comments
-  // 2. Remove whitespace around braces, colons, semi-colons
-  // 3. Remove newlines
   const minifiedCSS = cssContent
-    .replace(/\/\*[\s\S]*?\*\//g, '')  // Replace block comments
-    .replace(/\s+/g, ' ')              // Collapse whitespace
-    .replace(/\s*([{}:;>])\s*/g, '$1') // Remove spaces around syntax
-    .replace(/;}/g, '}')               // Remove trailing semicolons
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/\s*([{}:;>])\s*/g, '$1')
+    .replace(/;}/g, '}')
     .trim();
 
-  // Inject CSS into HTML inside a <style> block, replacing the placeholder
-  const styleBlock = `<style>${minifiedCSS}</style>`;
-  htmlContent = htmlContent.replace('<!-- <link rel="stylesheet" href="./styles.css" /> -->', styleBlock);
+  let finalSizeHTML = '';
 
-  // Minify HTML
-  // DO NOT minify the ASCII header comment. Only minify the DOM payload.
-  // We'll split the file at '<!DOCTYPE html>' to preserve the top CLI comment perfectly.
-  const splitIndex = htmlContent.indexOf('<!DOCTYPE html>');
-  const cliHeader = htmlContent.substring(0, splitIndex);
-  let domBody = htmlContent.substring(splitIndex);
+  const PAGES = ['index', 'articles', 'faq', 'download'];
+  for (let page of PAGES) {
+    let htmlContent = fs.readFileSync(path.join(__dirname, page + '.html'), 'utf8');
 
-  // Strip normal HTML comments from DOM (excluding the CLI Header which we already separated)
-  domBody = domBody.replace(/<!--[\s\S]*?-->/g, '');
-  // Collapse whitespace between tags
-  domBody = domBody.replace(/>\s+</g, '><');
+    // Inject CSS into HTML inside a <style> block, replacing the placeholder
+    const styleBlock = `<style>${minifiedCSS}</style>`;
+    htmlContent = htmlContent.replace('<!-- <link rel="stylesheet" href="./styles.css" /> -->', styleBlock);
 
-  // Re-combine header and minified DOM
-  const finalPayload = cliHeader + domBody;
+    const splitIndex = htmlContent.indexOf('<!DOCTYPE html>');
+    const cliHeader = htmlContent.substring(0, splitIndex);
+    let domBody = htmlContent.substring(splitIndex);
 
-  // Ensure output directory exists
-  if (!fs.existsSync(OUTPUT_DIR)) {
-    fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+    // Strip HTML comments from DOM
+    domBody = domBody.replace(/<!--[\s\S]*?-->/g, '');
+    domBody = domBody.replace(/\s+/g, ' ');
+    domBody = domBody.replace(/> </g, '><');
+
+    const finalPayload = cliHeader + domBody;
+
+    // Determine output path (e.g. dist/articles/index.html to avoid using .html extensions in URL routing)
+    let outDir = OUTPUT_DIR;
+    if (page !== 'index') {
+      outDir = path.join(OUTPUT_DIR, page);
+      if (!fs.existsSync(outDir)) {
+        fs.mkdirSync(outDir, { recursive: true });
+      }
+    } else {
+      if (!fs.existsSync(outDir)) {
+        fs.mkdirSync(outDir, { recursive: true });
+      }
+      finalSizeHTML = finalPayload;
+    }
+    fs.writeFileSync(path.join(outDir, 'index.html'), finalPayload);
   }
-
-  // Write out the single ~15KB output
-  fs.writeFileSync(OUTPUT_HTML, finalPayload, 'utf8');
 
   // Copy favicon
   if (fs.existsSync(SOURCE_FAVICON)) {
@@ -62,7 +66,7 @@ try {
   // Validate payload size
   const stats = fs.statSync(OUTPUT_HTML);
   const sizeKB = (stats.size / 1024).toFixed(2);
-  
+
   if (stats.size > 15360) {
     console.warn(`⚠️ WARNING: Final payload is ${sizeKB}KB (Exceeds <15KB goal).`);
   } else {
