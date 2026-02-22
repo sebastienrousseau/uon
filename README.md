@@ -609,7 +609,8 @@ src/uon/
 │   └── ssh_client.py        # Paramiko SSH transport + envelope protocol
 └── utils/
     ├── __init__.py
-    └── config.py            # Target store (JSON persistence)
+    ├── config.py            # Target store (JSON persistence)
+    └── policy.py            # AAGUID attestation policy (allowlist)
 
 scripts/
 ├── harden_target.sh         # Remote SSHD hardening script

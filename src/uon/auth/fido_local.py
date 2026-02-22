@@ -1,3 +1,8 @@
+# Copyright (c) 2024 Sebastien Rousseau
+#
+# Licensed under the MIT License. See LICENSE file in the project root
+# for full license information.
+
 """Platform-local FIDO2 biometric signing (Touch ID / Windows Hello / USB key).
 
 You use this module to create and exercise FIDO2 resident-key credentials
@@ -146,17 +151,17 @@ def _discover_client(rp_id: str) -> Fido2Client:
     # -- macOS platform authenticator (Touch ID) --
     if sys.platform == "darwin":
         try:
-            from fido2.client import MacOSClient  # type: ignore[attr-error]
+            from fido2.client import MacOSClient  # type: ignore[attr-defined]
 
             client = MacOSClient(origin, interaction=interaction)
-            return client
+            return client  # type: ignore[no-any-return]
         except Exception:  # noqa: S110 — intentional silent fallthrough to HID
             pass
 
     # -- Windows Hello --
     if sys.platform == "win32":
         try:
-            from fido2.client import WindowsClient  # type: ignore[attr-error]
+            from fido2.client import WindowsClient  # type: ignore[attr-defined]
 
             if WindowsClient.is_available():
                 client = WindowsClient(origin, interaction=interaction)
@@ -169,8 +174,8 @@ def _discover_client(rp_id: str) -> Fido2Client:
     if devices:
         return Fido2Client(
             devices[0],
-            origin,
-            interaction=interaction,
+            origin,  # type: ignore[arg-type]
+            interaction=interaction,  # type: ignore[call-arg]
         )
 
     raise NoPlatformAuthenticatorError(
@@ -272,7 +277,7 @@ def register(
         else AuthenticatorAttachment.PLATFORM,
         resident_key_requirement=ResidentKeyRequirement.REQUIRED,
         user_verification=UserVerificationRequirement.REQUIRED,
-        attestation=AttestationConveyancePreference.DIRECT,
+        attestation=AttestationConveyancePreference.DIRECT,  # type: ignore[call-arg]
     )
 
     attestation_response = client.make_credential(create_options["publicKey"])
@@ -350,8 +355,8 @@ def authenticate(
     # the target can verify the signature against the challenge it issued.
     options_dict = dict(request_options["publicKey"])
     options_dict["challenge"] = challenge
-    request_options = {"publicKey": options_dict}
+    request_options = {"publicKey": options_dict}  # type: ignore[assignment]
 
     assertion_response = client.get_assertion(request_options["publicKey"])
     # Return the first assertion (single authenticator expected).
-    return assertion_response.get_response(0)
+    return assertion_response.get_response(0)  # type: ignore[return-value]

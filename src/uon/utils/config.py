@@ -1,3 +1,8 @@
+# Copyright (c) 2024 Sebastien Rousseau
+#
+# Licensed under the MIT License. See LICENSE file in the project root
+# for full license information.
+
 """Local configuration and target management.
 
 Persists known remote targets as a JSON array in a platform-appropriate

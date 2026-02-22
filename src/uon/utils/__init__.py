@@ -1,3 +1,8 @@
+# Copyright (c) 2024 Sebastien Rousseau
+#
+# Licensed under the MIT License. See LICENSE file in the project root
+# for full license information.
+
 """Utility helpers -- configuration, path discovery, and data containers.
 
 This package provides the ``Target`` data model and ``TargetStore``

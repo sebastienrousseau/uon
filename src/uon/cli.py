@@ -1,3 +1,8 @@
+# Copyright (c) 2024 Sebastien Rousseau
+#
+# Licensed under the MIT License. See LICENSE file in the project root
+# for full license information.
+
 """CLI entry point for uon -- FIDO2-signed remote terminal execution.
 
 This module wires together every uon subsystem into a Click-based command
@@ -374,7 +379,7 @@ def _resolve_signature(
             credential_ids=credential_ids,
         )
         return {
-            "credentialId": base64.b64encode(response.credential_id).decode(),
+            "credentialId": base64.b64encode(response.credential_id).decode(),  # type: ignore[attr-defined]
             "authenticatorData": base64.b64encode(response.authenticator_data).decode(),
             "clientDataJSON": base64.b64encode(response.client_data).decode(),
             "signature": base64.b64encode(response.signature).decode(),
