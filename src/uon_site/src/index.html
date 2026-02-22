@@ -57,6 +57,9 @@
   }
   </script>
 
+  <!-- Preconnect Hints for External Assets -->
+  <link rel="preconnect" href="https://github.com" />
+
   <script>
     const savedTheme = localStorage.getItem('uon-theme');
     if (savedTheme) {
@@ -64,7 +67,7 @@
     }
   </script>
 
-  <!-- <link rel="stylesheet" href="./styles.css" /> -->
+  <link rel="stylesheet" href="/styles.css" />
 </head>
 
 <body>
@@ -77,6 +80,9 @@
     <div class="container nav-content flex items-center justify-between">
       <a href="/" class="logo" aria-label="uon home">uon<span>.</span></a>
       <div class="flex items-center gap-4">
+        <a href="/articles" class="nav-link">Articles</a>
+        <a href="/faq" class="nav-link">FAQ</a>
+        <a href="/download" class="nav-link">Download</a>
         <button id="theme-toggle" class="nav-icon-btn" aria-label="Toggle dark mode">
           <svg id="icon-moon" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round"
             stroke-linejoin="round" style="display: none;">
@@ -111,26 +117,55 @@
 
     <header class="container hero">
       <h1 class="hero-logo">
-        <svg width="120" height="120" viewBox="0 0 3600 3600" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"
-          role="img" fill="currentColor">
-          <path
-            d="m2599.2 363.6c-34.199-17.281-75.602-15.48-107.64 5.3984l-691.56 449.64-691.56-449.64c-32.039-20.879-73.441-23.039-107.64-5.3984-34.199 17.281-55.441 51.48-55.441 88.922v975.24 0.35938 1714.3c0 55.441 46.801 100.44 104.4 100.44 57.602 0 104.4-45 104.4-100.44l0.003906-1661 645.84-419.76 645.84 419.76v1666.1c0 55.441 46.801 100.44 104.4 100.44 57.602 0 104.4-45 104.4-100.44l0.003906-1719.4v-0.35938-975.24c0-37.441-21.242-71.281-55.441-88.918zm-1445 874.8v-596.52l459 298.44zm1291.7 0-459-298.44 459-298.44z" />
-        </svg>
         uon<span>.</span>
       </h1>
       <h2>Zero-Trust Terminal Execution</h2>
       <p>Secure, biometric-signed pipelines for macOS, Linux, and Windows Subsystem for Linux.</p>
       <div class="flex gap-4 justify-center mt-8">
-        <a href="https://github.com/sebastienrousseau/uon" class="btn btn-primary" aria-label="Get Started with uon">Get
-          Started</a>
+        <div class="install-widget flex items-center justify-between" aria-label="Install uon command">
+          <code>pip install uon</code>
+          <button id="copy-btn" class="nav-icon-btn" aria-label="Copy installation command">
+            <svg id="icon-copy" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            <svg id="icon-check" viewBox="0 0 24 24" stroke="var(--brand-color)" stroke-width="3" stroke-linecap="round"
+              stroke-linejoin="round" style="display: none;">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </button>
+        </div>
         <a href="#features" class="btn btn-secondary" aria-label="Learn More about uon features">Explore Features</a>
+      </div>
+      <div class="terminal-window" aria-hidden="true">
+        <div class="terminal-header flex items-center">
+          <div class="terminal-dot red"></div>
+          <div class="terminal-dot yellow"></div>
+          <div class="terminal-dot green"></div>
+          <div class="terminal-title">uon-cli — bash</div>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line">
+            <span class="terminal-prompt">%</span>
+            <span id="term-command"></span><span class="terminal-cursor"></span>
+          </div>
+          <div class="terminal-line" id="term-step1" style="display: none;">[Verifying hardware FIDO2 attestation...]
+          </div>
+          <div class="terminal-line" id="term-step2" style="display: none;">✓ Attestation granted. Spawning ephemeral
+            JIT profile.</div>
+          <div class="terminal-line" id="term-output" style="display: none;">
+            22:36 up 14 days, 3:12
+            Load average: 0.14 0.12 0.09
+            Target: admin@prod-db</div>
+        </div>
       </div>
     </header>
 
     <section id="features" class="container features" aria-label="Core Features">
 
       <!-- Card 1: Spans full width like a hero bento box -->
-      <article class="card">
+      <article class="card cursor-pointer" onclick="window.location.href='/articles/death-of-passwords/index.html'">
         <div class="card-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24">
             <path
@@ -145,7 +180,8 @@
       </article>
 
       <!-- Card 2: Half width -->
-      <article class="card">
+      <article class="card cursor-pointer"
+        onclick="window.location.href='/articles/zero-standing-privilege/index.html'">
         <div class="card-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24">
             <path
@@ -159,7 +195,7 @@
       </article>
 
       <!-- Card 3: Half width -->
-      <article class="card">
+      <article class="card cursor-pointer" onclick="window.location.href='/articles/post-quantum-terminals/index.html'">
         <div class="card-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24">
             <path
@@ -174,105 +210,53 @@
 
     </section>
 
-    <section id="articles" class="container articles-section" aria-label="Articles and Deep Dives">
-      <div class="flex items-center justify-between mb-8">
-        <h2 class="section-title">Articles &amp; Deep Dives</h2>
-      </div>
-      <div class="articles-grid">
-        <article class="card article-card cursor-pointer">
-          <span class="tag">Architecture</span>
-          <h3>The Death of Passwords in SSH</h3>
-          <p>Why legacy asymmetric key pairs are failing corporate compliance and how mathematically proven FIDO2
-            Enclaves are replacing them.</p>
-        </article>
-        <article class="card article-card cursor-pointer">
-          <span class="tag">Security</span>
-          <h3>Zero Standing Privilege (ZSP) Explained</h3>
-          <p>Understanding how JIT privilege escalation via ephemeral sandbox execution profiles secures critical
-            infrastructure.</p>
-        </article>
-        <article class="card article-card cursor-pointer">
-          <span class="tag">Cryptography</span>
-          <h3>Post-Quantum Terminals</h3>
-          <p>Integrating ML-DSA hybrids and strict SNTRUP exchanges directly over AF_VSOCK native bindings in
-            memory-safe PyO3 Rust.</p>
-        </article>
-      </div>
-    </section>
-
-    <section id="faq" class="container faq-section" aria-label="Frequently Asked Questions">
-      <h2 class="section-title text-center">Frequently Asked Questions</h2>
-      <div class="faq-grid">
-        <details class="faq-item">
-          <summary>How does uon secure terminal execution?</summary>
-          <div class="faq-content">
-            <p>uon utilizes aggressive hardware attestation via FIDO2 passkeys anchored to your device's Secure Enclave.
-              This eliminates the risk of stolen SSH keys, instantly blocking relay attacks and unauthorized pivoting
-              via CAEP integration and eBPF kernel enforcement.</p>
-          </div>
-        </details>
-        <details class="faq-item">
-          <summary>What is Zero Standing Privilege (ZSP)?</summary>
-          <div class="faq-content">
-            <p>ZSP ensures that no user has persistent access to the target machine. uon intercepts the connection
-              request, evaluates the FIDO2 signature, and dynamically spawns an ephemeral <code>uon-exec</code> Linux
-              group specifically for that session, tearing it down immediately after termination.</p>
-          </div>
-        </details>
-        <details class="faq-item">
-          <summary>Which operating systems are supported?</summary>
-          <div class="faq-content">
-            <p>The core terminal execution pipeline is inherently cross-platform, offering native deployment target
-              support for macOS (utilizing EndpointSecurity frameworks), Linux (utilizing eBPF tracepoints), and Windows
-              Subsystem for Linux natively over AF_VSOCK streams without fragile TCP emulation.</p>
-          </div>
-        </details>
-      </div>
-    </section>
-
-    <section id="download" class="container download-section text-center" aria-label="Download uon">
-      <h2>Ready to seal your infrastructure?</h2>
-      <p>Available as a zero-dependency Rust PyO3 binary distribution targeting macOS, Linux, and Windows Subsystem for
-        Linux architectures.</p>
-      <div class="flex gap-4 justify-center mt-8 download-cta">
-        <a href="https://github.com/sebastienrousseau/uon/releases" class="btn btn-primary"
-          aria-label="Download uon for your architecture">Download uon Core</a>
-        <a href="https://github.com/sebastienrousseau/uon#documentation" class="btn btn-secondary"
-          aria-label="Read the Installation Guide">View Documentation</a>
-      </div>
-    </section>
-
   </main>
 
   <footer>
-    <div class="container">
+    <div class="container flex flex-col items-center gap-6" style="padding: 2rem 0;">
+      <div class="flex gap-4 justify-center" style="flex-wrap: wrap;">
+        <a href="/articles" class="nav-link">Articles</a>
+        <a href="/faq" class="nav-link">FAQ</a>
+        <a href="/download" class="nav-link">Download</a>
+        <a href="mailto:support@uon.local" class="nav-link">support@uon.local</a>
+      </div>
       <p>&copy;
-        <script>document.write(new Date().getFullYear())</script> Sebastien Rousseau. Licensed under the GNU AGPLv3.
+        <script>document.write(new Date().getFullYear())</script> Sebastien Rousseau.
       </p>
     </div>
   </footer>
 
   <script>
     document.addEventListener("DOMContentLoaded", () => {
-      const startBtn = document.querySelector(".btn-primary");
+      // Installation Widget Clipboard Logic
+      const copyBtn = document.getElementById("copy-btn");
+      const iconCopy = document.getElementById("icon-copy");
+      const iconCheck = document.getElementById("icon-check");
+      const installText = "pip install uon";
+
+      if (copyBtn) {
+        copyBtn.addEventListener("click", () => {
+          navigator.clipboard.writeText(installText).then(() => {
+            // Success animation loop
+            iconCopy.style.display = "none";
+            iconCheck.style.display = "block";
+            copyBtn.classList.add("copied-pulse");
+
+            setTimeout(() => {
+              iconCheck.style.display = "none";
+              iconCopy.style.display = "block";
+              copyBtn.classList.remove("copied-pulse");
+            }, 2000);
+          }).catch(err => {
+            console.error("Clipboard replication failed:", err);
+          });
+        });
+      }
+
       const cliFallback = document.getElementById("cli-content");
 
-      startBtn.addEventListener("click", async (e) => {
-        e.preventDefault();
-
-        startBtn.textContent = "Booting uon.core...";
-        startBtn.style.pointerEvents = "none";
-
-        try {
-          const { init_terminal } = await import('./pkg/uon_core.js');
-          document.querySelector(".hero").style.display = "none";
-          cliFallback.style.display = "block";
-          await init_terminal("cli-content");
-        } catch (err) {
-          console.error("Wasm boot failed:", err);
-          startBtn.textContent = "Boot Failed. Check Console.";
-        }
-      });
+      // Note: Replaced legacy "Get Started" Wasm boot loader payload with explicit
+      // Glassmorphic clipboard logic for modern UX flows.
 
       const themeBtn = document.getElementById("theme-toggle");
       const iconSun = document.getElementById("icon-sun");
@@ -298,6 +282,52 @@
         const newTheme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
         applyTheme(newTheme);
       });
+
+      // Terminal Typing Animation
+      const termCommand = document.getElementById("term-command");
+      const cursor = document.querySelector(".terminal-cursor");
+      const step1 = document.getElementById("term-step1");
+      const step2 = document.getElementById("term-step2");
+      const output = document.getElementById("term-output");
+      const commandStr = 'uon admin@prod-db "uptime"';
+      let typingIdx = 0;
+
+      async function runTerminalAnimation() {
+        // Reset state
+        termCommand.textContent = "";
+        step1.style.display = "none";
+        step2.style.display = "none";
+        output.style.display = "none";
+        cursor.style.display = "inline-block";
+        typingIdx = 0;
+
+        // Type command
+        await new Promise(r => setTimeout(r, 1000));
+        while (typingIdx < commandStr.length) {
+          termCommand.textContent += commandStr.charAt(typingIdx);
+          typingIdx++;
+          await new Promise(r => setTimeout(r, Math.random() * 50 + 30));
+        }
+
+        cursor.style.display = "none";
+
+        // Step 1: Verification
+        await new Promise(r => setTimeout(r, 400));
+        step1.style.display = "block";
+
+        // Step 2: Success
+        await new Promise(r => setTimeout(r, 1200));
+        step2.style.display = "block";
+
+        // Final Output
+        await new Promise(r => setTimeout(r, 200));
+        output.style.display = "block";
+
+        // Loop after a long delay
+        setTimeout(runTerminalAnimation, 8000);
+      }
+
+      runTerminalAnimation();
     });
   </script>
 </body>

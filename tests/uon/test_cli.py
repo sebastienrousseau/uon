@@ -77,6 +77,15 @@ class TestMainGroup:
             result = main.callback(target=None, command=None)
         assert result is None
 
+    def test_target_is_subcommand_via_target_arg(self) -> None:
+        """Test lines 93-94 where target matches a subcommand programmatically."""
+        ctx = click.Context(main)
+        # By not setting invoked_subcommand, it falls into the manual route
+        with patch.object(ctx, "invoke") as mock_invoke:
+            with ctx:
+                main.callback(target="list", command=None)
+        mock_invoke.assert_called_once()
+
 
 # ── add subcommand ───────────────────────────────────────────────────
 
@@ -95,6 +104,25 @@ class TestAdd:
         assert t is not None
         assert t.port == 2222
         assert t.user == "deploy"
+
+
+# ── init subcommand ──────────────────────────────────────────────────
+
+
+class TestInit:
+    @patch("uon.ux.wizard.OnboardingWizard")
+    def test_success(self, mock_wizard: MagicMock, cli_runner: click.testing.CliRunner) -> None:
+        from uon.cli import init_wizard
+        result = cli_runner.invoke(init_wizard, [])
+        assert result.exit_code == 0
+        mock_wizard.return_value.run.assert_called_once()
+
+    def test_import_error(self, cli_runner: click.testing.CliRunner) -> None:
+        from uon.cli import init_wizard
+        with patch.dict("sys.modules", {"uon.ux.wizard": None}):
+            result = cli_runner.invoke(init_wizard, [])
+            assert result.exit_code != 0
+            assert "Error loading TUI components" in result.output
 
 
 # ── list subcommand ──────────────────────────────────────────────────
@@ -267,6 +295,28 @@ class TestRunCommand:
         with pytest.raises(SystemExit) as exc_info:
             _run_command("dev", "uptime")
         assert exc_info.value.code == 0
+
+    @patch("uon.cli.core.execute_session")
+    @patch("uon.cli._resolve_signature")
+    @patch("uon.cli.core.generate_challenge")
+    def test_execution_exception(
+        self,
+        mock_challenge: MagicMock,
+        mock_resolve: MagicMock,
+        mock_exec: MagicMock,
+        isolate_store: Path,
+    ) -> None:
+        store = TargetStore()
+        t = Target(alias="dev", host="10.0.0.1", credentials=[Credential(id="Y3JlZA==")])
+        store.add(t)
+
+        mock_challenge.return_value = (b"\x00" * 32, b"\x01" * 32)
+        mock_resolve.return_value = MagicMock()
+        mock_exec.side_effect = RuntimeError("SSH boom")
+
+        with pytest.raises(SystemExit) as exc_info:
+            _run_command("dev", "uptime")
+        assert exc_info.value.code == 1
 
 
 # ── _resolve_signature ──────────────────────────────────────────────

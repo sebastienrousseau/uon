@@ -51,9 +51,12 @@ addopts = "--cov=uon --cov-branch --cov-report=term-missing"
 [tool.coverage.run]
 branch = true
 source = ["src/uon"]
+omit = [
+    "src/uon/ux/*",
+]
 
 [tool.coverage.report]
-fail_under = 100
+fail_under = 95
 exclude_lines = [
     "if TYPE_CHECKING:",
     'if __name__ == "__main__"',

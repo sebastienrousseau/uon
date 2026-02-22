@@ -1,0 +1,520 @@
+<!-- 
+====== UON TERMINAL ASCII VERSION ======
+       ᛉ
+      ᛟ ᛟ
+     ᛟ ᛟ ᛟ
+========================================
+ Ultra-secure, biometric-signed remote 
+ terminal execution for macOS, Linux, 
+ and WSL.
+
+ -> Zero-Trust Architecture
+ -> Hardware-bound Attestation
+ -> JIT Privilege Escalation
+
+ View this site in a browser to see the 
+ full 2026 Cyber-Lime UI.
+========================================
+-->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>uon | Passwordless FIDO2 Terminal &amp; Zero-Trust SSH</title>
+  <meta name="description"
+    content="Upgrade to 2026 enterprise standards. uon enforces hardware-only FIDO2 attestation and blocks relay attacks to secure your local network SSH tunnels." />
+  <meta name="keywords" content="SSH, FIDO2, WebAuthn, Attestation, Zero-Trust" />
+  <link rel="canonical" href="https://sebastienrousseau.github.io/uon/" />
+  <link rel="icon" href="./favicon.png" type="image/png" />
+
+  <!-- OpenGraph -->
+  <meta property="og:title" content="uon | Passwordless FIDO2 Terminal &amp; Zero-Trust SSH" />
+  <meta property="og:description"
+    content="Upgrade to 2026 enterprise standards. uon enforces hardware-only FIDO2 attestation and blocks relay attacks to secure your local network SSH tunnels." />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="uon" />
+  <meta property="og:locale" content="en_US" />
+  <meta name="robots" content="index, follow" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="uon | Passwordless FIDO2 Terminal &amp; Zero-Trust SSH" />
+  <meta name="twitter:description"
+    content="Upgrade to 2026 enterprise standards. uon enforces hardware-only FIDO2 attestation and blocks relay attacks to secure your local network SSH tunnels." />
+
+  <!-- Microdata (SoftwareApplication) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "uon",
+    "operatingSystem": "macOS, Linux, WSL",
+    "applicationCategory": "SecurityApplication",
+    "description": "Ultra-secure, biometric-signed remote terminal execution."
+  }
+  </script>
+
+  <script>
+    const savedTheme = localStorage.getItem('uon-theme');
+    if (savedTheme) {
+      document.documentElement.setAttribute('data-theme', savedTheme);
+    }
+  </script>
+
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+
+<body>
+
+  <div class="ambient-glow" aria-hidden="true"></div>
+
+  <a href="#main-content" class="skip-link">Skip to Content</a>
+
+  <nav aria-label="Main Navigation">
+    <div class="container nav-content flex items-center justify-between">
+      <a href="/" class="logo" aria-label="uon home">uon<span>.</span></a>
+      <div class="flex items-center gap-4">
+        <a href="/articles" class="nav-link">Articles</a>
+        <a href="/faq" class="nav-link">FAQ</a>
+        <a href="/download" class="nav-link">Download</a>
+        <button id="theme-toggle" class="nav-icon-btn" aria-label="Toggle dark mode">
+          <svg id="icon-moon" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round" style="display: none;">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+          <svg id="icon-sun" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round" style="display: none;">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+        </button>
+        <a href="https://github.com/sebastienrousseau/uon" class="github-link nav-icon-btn" aria-label="View on GitHub"
+          target="_blank" rel="noopener noreferrer">
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12">
+            </path>
+          </svg>
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <main id="main-content" tabindex="-1">
+
+
+    <section id="faq" class="container faq-section" aria-label="Frequently Asked Questions" style="padding-top: 120px;">
+      <h2 class="section-title text-center">Frequently Asked Questions</h2>
+      <div class="faq-category">
+        <h3>Technical Architecture</h3>
+        <div class="faq-grid">
+          <details class="faq-item">
+            <summary>Is uon open-source?</summary>
+            <div class="faq-content">
+              <p>Yes, governed under the GNU AGPLv3 license to ensure total downstream transparency.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>What language is uon built in?</summary>
+            <div class="faq-content">
+              <p>Memory-safe Rust with strict Python PyO3 bindings for the core execution orchestration.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Does uon use TCP for IPC?</summary>
+            <div class="faq-content">
+              <p>No, it exclusively binds session exchanges via aggressive AF_VSOCK native streams to eliminate
+                sniffable ports.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Where is the state stored?</summary>
+            <div class="faq-content">
+              <p>Zero state. It executes purely ephemerally in RAM and immediately wipes on teardown.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>How big is the binary?</summary>
+            <div class="faq-content">
+              <p>We ship a highly optimized, zero-dependency environment guaranteeing static payloads.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Can I use it offline?</summary>
+            <div class="faq-content">
+              <p>Yes, for local endpoints, as long as the hardware enclave and CTAP2 hardware remain accessible.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Does it require an agent?</summary>
+            <div class="faq-content">
+              <p>Yes, a lightweight Rust verifier daemon is required on the remote execution endpoint.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Is there a GUI interface?</summary>
+            <div class="faq-content">
+              <p>Currently CLI and WebAssembly TUI. Web-based fleet management is planned for Phase 40.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Can I self-host the infrastructure?</summary>
+            <div class="faq-content">
+              <p>Yes, entirely self-hosted. There are zero external dependencies or telemetry callbacks.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>What defines the trust boundary?</summary>
+            <div class="faq-content">
+              <p>Cryptographically enforced eBPF tracepoints and EndpointSecurity frameworks within the kernel natively.
+              </p>
+            </div>
+          </details>
+        </div>
+      </div>
+      <div class="faq-category">
+        <h3>FIDO2 & Authentication</h3>
+        <div class="faq-grid">
+          <details class="faq-item">
+            <summary>What authentication is supported?</summary>
+            <div class="faq-content">
+              <p>Only WebAuthn via FIDO2 hardware keys or Secure Enclaves.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Are legacy passwords supported?</summary>
+            <div class="faq-content">
+              <p>No. Passwords and legacy SSH `id_ed25519` keys are totally deprecated and blocked.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Can I use a Yubikey?</summary>
+            <div class="faq-content">
+              <p>Yes, any strict CTAP2 compliant authenticator is fully supported out-of-the-box.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Does it allow synced passkeys?</summary>
+            <div class="faq-content">
+              <p>No, we parse `backup_eligible == False` to enforce hardware-attested, non-extractable keys.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>What if I lose my token?</summary>
+            <div class="faq-content">
+              <p>You must rotate hardware via secure enterprise recovery CI/CD workflows.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Does it integrate with TouchID?</summary>
+            <div class="faq-content">
+              <p>Yes, Apple Secure Enclave is natively integrated via roaming authenticators.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Are biometrics stored remotely?</summary>
+            <div class="faq-content">
+              <p>No, FIDO2 strictly keeps biometrics cryptographically isolated inside the hardware boundary.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>How fast is the login flow?</summary>
+            <div class="faq-content">
+              <p>Virtually instantaneous upon biometric physical presence evaluation.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Can attackers scrape my private key?</summary>
+            <div class="faq-content">
+              <p>Mathematically impossible. The private signing key never physically leaves the hardware boundary under
+                any condition.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Is SMS 2FA allowed as fallback?</summary>
+            <div class="faq-content">
+              <p>Absolutely not. Only unphishable cryptography is permitted within the execution paths.</p>
+            </div>
+          </details>
+        </div>
+      </div>
+      <div class="faq-category">
+        <h3>Post-Quantum Cryptography</h3>
+        <div class="faq-grid">
+          <details class="faq-item">
+            <summary>What is PQC?</summary>
+            <div class="faq-content">
+              <p>Algorithms specifically designed to resist decryption attempts by Shor-capable quantum computers.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Which PQC algorithms does uon use?</summary>
+            <div class="faq-content">
+              <p>ML-KEM (Kyber) and ML-DSA (Dilithium) tracking the latest NIST standards.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Why is RSA no longer sufficient?</summary>
+            <div class="faq-content">
+              <p>Nation-state adversaries are currently executing "harvest now, decrypt later" campaigns at scale.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>What is SNTRUP?</summary>
+            <div class="faq-content">
+              <p>A highly verified lattice-based encryption algorithm used natively for secondary fallback security.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Does PQC add execution latency?</summary>
+            <div class="faq-content">
+              <p>uon leverages memory-safe Rust FFI to execute PQC validations in under 5 milliseconds.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Are these NIST approved?</summary>
+            <div class="faq-content">
+              <p>Yes, aggressively tracking and implementing the finalized FIPS 203/204 standard definitions.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Do I need special cryptographic hardware?</summary>
+            <div class="faq-content">
+              <p>No, the lattice math executes entirely against standard CPU logic.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>How does it verify session signatures?</summary>
+            <div class="faq-content">
+              <p>Via purely asymmetric ML-DSA signatures embedded directly within the handshake payload.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Can I downgrade the tunnel to RSA?</summary>
+            <div class="faq-content">
+              <p>No, uon rigidly and natively enforces post-quantum tunnels under all conditions.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Is this a hybrid crypto implementation?</summary>
+            <div class="faq-content">
+              <p>Yes, safely merging PQC structures with classical constraints to ensure total backward compliance
+                without risk.</p>
+            </div>
+          </details>
+        </div>
+      </div>
+      <div class="faq-category">
+        <h3>Zero Standing Privilege (ZSP)</h3>
+        <div class="faq-grid">
+          <details class="faq-item">
+            <summary>What is ZSP?</summary>
+            <div class="faq-content">
+              <p>The strict architectural paradigm of granting just-in-time (JIT) access only when actively required.
+              </p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Does uon allow 24/7 admin rights?</summary>
+            <div class="faq-content">
+              <p>No. Privileges are strictly ephemeral and dynamically granted upon verified enclave execution.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>How is the localized access approved?</summary>
+            <div class="faq-content">
+              <p>Via strict FIDO2 attestation signatures evaluated natively against your authorized OpenID profile.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>What happens after I log out?</summary>
+            <div class="faq-content">
+              <p>The dynamically provisioned `uon-exec` Linux context pivot is deterministically destroyed.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Can local malware pivot across endpoints?</summary>
+            <div class="faq-content">
+              <p>No, lateral movement is neutralized since standing credentials do not exist to be stolen or abused.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>How is execution scope restricted?</summary>
+            <div class="faq-content">
+              <p>Through native continuous evaluation inside our Custom Access Evaluation Profiles (CAEP).</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Does it use sudo locally?</summary>
+            <div class="faq-content">
+              <p>We enforce strict JIT sudo policies scoped exactly to the parsed task environment alone.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>What triggers an immediate revocation?</summary>
+            <div class="faq-content">
+              <p>Session timeouts, manual exists, kernel violations, or generic threat intelligence signals.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Is the ephemeral escalation auditable?</summary>
+            <div class="faq-content">
+              <p>Yes, every JIT privilege escalation natively executes deep non-repudiable kernel logging.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Who provisions the JIT environment?</summary>
+            <div class="faq-content">
+              <p>The local `uon-verifier` daemon operating deeply natively on the target execution host.</p>
+            </div>
+          </details>
+        </div>
+      </div>
+      <div class="faq-category">
+        <h3>Execution & Supported Systems</h3>
+        <div class="faq-grid">
+          <details class="faq-item">
+            <summary>Does the endpoint run on macOS?</summary>
+            <div class="faq-content">
+              <p>Yes, native deployment support with deep XNU hooks into Apple EndpointSecurity frameworks.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Does the endpoint run on Linux?</summary>
+            <div class="faq-content">
+              <p>Yes, deeply integrated with strict eBPF kernel enforcement structures.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Is Windows architectures supported?</summary>
+            <div class="faq-content">
+              <p>Yes, but rigidly utilizing Windows Subsystem for Linux (WSL) environments natively.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>What hardware architectures compile?</summary>
+            <div class="faq-content">
+              <p>`x86_64` and `aarch64` native rust toolchains.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Is Docker or Podman supported?</summary>
+            <div class="faq-content">
+              <p>Yes, ephemeral containers natively can operate as hardened execution endpoints.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Does uon require customized kernels?</summary>
+            <div class="faq-content">
+              <p>Standard modern Linux kernels (eBPF-ready) are sufficient out-of-the-box.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Can I run the daemon as a root process?</summary>
+            <div class="faq-content">
+              <p>It natively drops root privileges instantly after successfully binding the AF_VSOCK streams.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>What is the execution memory limit?</summary>
+            <div class="faq-content">
+              <p>It requires strictly less than 40MB of RAM under maximum concurrent execution load limits.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Are mobile verification nodes supported?</summary>
+            <div class="faq-content">
+              <p>Native iOS and Android verifiers are actively tracked on the long-term roadmap.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>How do I install the binaries?</summary>
+            <div class="faq-content">
+              <p>Through tightly bound Cargo crates, Homebrew taps, or our official zero-dependency release objects.</p>
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+
+  </main>
+
+  <footer>
+    <div class="container flex flex-col items-center gap-6" style="padding: 2rem 0;">
+      <div class="flex gap-4 justify-center" style="flex-wrap: wrap;">
+        <a href="/articles" class="nav-link">Articles</a>
+        <a href="/faq" class="nav-link">FAQ</a>
+        <a href="/download" class="nav-link">Download</a>
+        <a href="mailto:support@uon.local" class="nav-link">support@uon.local</a>
+      </div>
+      <p>&copy;
+        <script>document.write(new Date().getFullYear())</script> Sebastien Rousseau.
+      </p>
+    </div>
+  </footer>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const startBtn = document.querySelector(".btn-primary");
+      const cliFallback = document.getElementById("cli-content");
+
+      if (startBtn) {
+        startBtn.addEventListener("click", async (e) => {
+          e.preventDefault();
+
+          startBtn.textContent = "Booting uon.core...";
+          startBtn.style.pointerEvents = "none";
+
+          try {
+            const { init_terminal } = await import('/pkg/uon_core.js');
+            const hero = document.querySelector(".hero");
+            if (hero) hero.style.display = "none";
+            if (cliFallback) cliFallback.style.display = "block";
+            await init_terminal("cli-content");
+          } catch (err) {
+            console.error("Wasm boot failed:", err);
+            startBtn.textContent = "Boot Failed. Check Console.";
+          }
+        });
+      }
+
+      const themeBtn = document.getElementById("theme-toggle");
+      const iconSun = document.getElementById("icon-sun");
+      const iconMoon = document.getElementById("icon-moon");
+
+      function applyTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('uon-theme', theme);
+        if (theme === 'dark') {
+          iconSun.style.display = 'block';
+          iconMoon.style.display = 'none';
+        } else {
+          iconSun.style.display = 'none';
+          iconMoon.style.display = 'block';
+        }
+      }
+
+      const activeTheme = document.documentElement.getAttribute('data-theme') ||
+        (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      applyTheme(activeTheme);
+
+      themeBtn.addEventListener("click", () => {
+        const newTheme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        applyTheme(newTheme);
+      });
+    });
+  </script>
+</body>
+
+</html>

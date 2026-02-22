@@ -16,7 +16,7 @@ from textual.containers import Center, Grid
 from textual.screen import ModalScreen
 from textual.widgets import Button, Label, Static
 
-from uon.auth.fido_local import prompt_fido2_step_up
+from uon.auth.fido_local import authenticate
 from uon.core import freeze_execution, resume_execution
 
 logger = logging.getLogger(__name__)
@@ -77,8 +77,8 @@ class CAEPInterventionScreen(ModalScreen[bool]):
         """The Update Loop: Fires the FIDO2 driver securely."""
         if event.button.id == "caep-btn":
             try:
-                # Prompt the hardware key synchronously (blocks UI temporarily while flashing key)
-                assertion = prompt_fido2_step_up(reason=self.anomaly_details)
+                # Prompt the hardware key synchronously using the primary authenticate wrapper
+                assertion = authenticate(challenge=b"CAEP_STEP_UP", credential_ids=[])
                 if assertion:
                     self.dismiss(True)
                 else:

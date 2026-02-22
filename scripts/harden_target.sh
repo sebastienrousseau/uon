@@ -18,22 +18,21 @@
 
 set -euo pipefail
 
-# ---- Defaults ------------------------------------------------------------
+function main() {
+    local SUBNET="${1:-192.168.0.0/16}"
+    local SSHD_CONFIG="/etc/ssh/sshd_config"
+    local BACKUP="${SSHD_CONFIG}.uon-backup.$(date +%s)"
 
-SUBNET="${1:-192.168.0.0/16}"
-SSHD_CONFIG="/etc/ssh/sshd_config"
-BACKUP="${SSHD_CONFIG}.uon-backup.$(date +%s)"
+    # ---- Colours --------------------------------------------------------------
 
-# ---- Colours --------------------------------------------------------------
+    local RED='\033[0;31m'
+    local GREEN='\033[0;32m'
+    local YELLOW='\033[1;33m'
+    local NC='\033[0m'
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-
-info()  { printf "${GREEN}[uon]${NC} %s\n" "$*"; }
-warn()  { printf "${YELLOW}[uon]${NC} %s\n" "$*"; }
-error() { printf "${RED}[uon]${NC} %s\n" "$*" >&2; }
+    function info()  { printf "${GREEN}[uon]${NC} %s\n" "$*"; }
+    function warn()  { printf "${YELLOW}[uon]${NC} %s\n" "$*"; }
+    function error() { printf "${RED}[uon]${NC} %s\n" "$*" >&2; }
 
 # ---- Pre-flight checks ---------------------------------------------------
 
@@ -48,10 +47,10 @@ if [[ ! -f "$SSHD_CONFIG" ]]; then
 fi
 
 # Check OpenSSH version (PubkeyAuthOptions requires >= 8.2)
-SSHD_VERSION=$(sshd -V 2>&1 | sed -n 's/.*OpenSSH_\([0-9]*\.[0-9]*\).*/\1/p')
+local SSHD_VERSION=$(sshd -V 2>&1 | sed -n 's/.*OpenSSH_\([0-9]*\.[0-9]*\).*/\1/p')
 SSHD_VERSION="${SSHD_VERSION:-0.0}"
-MAJOR="${SSHD_VERSION%%.*}"
-MINOR="${SSHD_VERSION##*.}"
+local MAJOR="${SSHD_VERSION%%.*}"
+local MINOR="${SSHD_VERSION##*.}"
 
 if [[ "$MAJOR" -lt 8 ]] || { [[ "$MAJOR" -eq 8 ]] && [[ "$MINOR" -lt 2 ]]; }; then
     warn "OpenSSH ${SSHD_VERSION} detected.  PubkeyAuthOptions requires >= 8.2."
@@ -159,3 +158,6 @@ info "  3. Confirm you can still connect before closing this session!"
 warn ""
 warn "IMPORTANT: Keep this terminal open until you verify access via uon."
 warn "           If you lock yourself out, restore from: $BACKUP"
+}
+
+main "$@"

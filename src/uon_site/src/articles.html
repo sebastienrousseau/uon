@@ -1,0 +1,195 @@
+<!-- 
+====== UON TERMINAL ASCII VERSION ======
+       ᛉ
+      ᛟ ᛟ
+     ᛟ ᛟ ᛟ
+========================================
+ Ultra-secure, biometric-signed remote 
+ terminal execution for macOS, Linux, 
+ and WSL.
+
+ -> Zero-Trust Architecture
+ -> Hardware-bound Attestation
+ -> JIT Privilege Escalation
+
+ View this site in a browser to see the 
+ full 2026 Cyber-Lime UI.
+========================================
+-->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>uon | Passwordless FIDO2 Terminal &amp; Zero-Trust SSH</title>
+  <meta name="description"
+    content="Upgrade to 2026 enterprise standards. uon enforces hardware-only FIDO2 attestation and blocks relay attacks to secure your local network SSH tunnels." />
+  <meta name="keywords" content="SSH, FIDO2, WebAuthn, Attestation, Zero-Trust" />
+  <link rel="canonical" href="https://sebastienrousseau.github.io/uon/" />
+  <link rel="icon" href="./favicon.png" type="image/png" />
+
+  <!-- OpenGraph -->
+  <meta property="og:title" content="uon | Passwordless FIDO2 Terminal &amp; Zero-Trust SSH" />
+  <meta property="og:description"
+    content="Upgrade to 2026 enterprise standards. uon enforces hardware-only FIDO2 attestation and blocks relay attacks to secure your local network SSH tunnels." />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="uon" />
+  <meta property="og:locale" content="en_US" />
+  <meta name="robots" content="index, follow" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="uon | Passwordless FIDO2 Terminal &amp; Zero-Trust SSH" />
+  <meta name="twitter:description"
+    content="Upgrade to 2026 enterprise standards. uon enforces hardware-only FIDO2 attestation and blocks relay attacks to secure your local network SSH tunnels." />
+
+  <!-- Microdata (SoftwareApplication) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "uon",
+    "operatingSystem": "macOS, Linux, WSL",
+    "applicationCategory": "SecurityApplication",
+    "description": "Ultra-secure, biometric-signed remote terminal execution."
+  }
+  </script>
+
+  <script>
+    const savedTheme = localStorage.getItem('uon-theme');
+    if (savedTheme) {
+      document.documentElement.setAttribute('data-theme', savedTheme);
+    }
+  </script>
+
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+
+<body>
+
+  <div class="ambient-glow" aria-hidden="true"></div>
+
+  <a href="#main-content" class="skip-link">Skip to Content</a>
+
+  <nav aria-label="Main Navigation">
+    <div class="container nav-content flex items-center justify-between">
+      <a href="/" class="logo" aria-label="uon home">uon<span>.</span></a>
+      <div class="flex items-center gap-4">
+        <a href="/articles" class="nav-link">Articles</a>
+        <a href="/faq" class="nav-link">FAQ</a>
+        <a href="/download" class="nav-link">Download</a>
+        <button id="theme-toggle" class="nav-icon-btn" aria-label="Toggle dark mode">
+          <svg id="icon-moon" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round" style="display: none;">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+          <svg id="icon-sun" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round" style="display: none;">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+        </button>
+        <a href="https://github.com/sebastienrousseau/uon" class="github-link nav-icon-btn" aria-label="View on GitHub"
+          target="_blank" rel="noopener noreferrer">
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12">
+            </path>
+          </svg>
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <main id="main-content" tabindex="-1">
+
+    <section id="articles" class="container articles-section" aria-label="All News Stories and Articles"
+      style="padding-top: 120px;">
+      <div class="section-top text-center" style="margin-bottom: 64px;">
+        <span class="tag">Knowledge Base</span>
+        <h2 class="section-title">All News Stories and Articles</h2>
+      </div>
+      <div id="dynamic-articles-container" class="flex flex-col gap-6 w-full max-w-4xl mx-auto">
+      </div>
+    </section>
+
+
+  </main>
+
+  <footer>
+    <div class="container flex flex-col items-center gap-6" style="padding: 2rem 0;">
+      <div class="flex gap-4 justify-center" style="flex-wrap: wrap;">
+        <a href="/articles" class="nav-link">Articles</a>
+        <a href="/faq" class="nav-link">FAQ</a>
+        <a href="/download" class="nav-link">Download</a>
+        <a href="mailto:support@uon.local" class="nav-link">support@uon.local</a>
+      </div>
+      <p>&copy;
+        <script>document.write(new Date().getFullYear())</script> Sebastien Rousseau.
+      </p>
+    </div>
+  </footer>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const startBtn = document.querySelector(".btn-primary");
+      const cliFallback = document.getElementById("cli-content");
+
+      if (startBtn) {
+        startBtn.addEventListener("click", async (e) => {
+          e.preventDefault();
+
+          startBtn.textContent = "Booting uon.core...";
+          startBtn.style.pointerEvents = "none";
+
+          try {
+            const { init_terminal } = await import('/pkg/uon_core.js');
+            const hero = document.querySelector(".hero");
+            if (hero) hero.style.display = "none";
+            if (cliFallback) cliFallback.style.display = "block";
+            await init_terminal("cli-content");
+          } catch (err) {
+            console.error("Wasm boot failed:", err);
+            startBtn.textContent = "Boot Failed. Check Console.";
+          }
+        });
+      }
+
+      const themeBtn = document.getElementById("theme-toggle");
+      const iconSun = document.getElementById("icon-sun");
+      const iconMoon = document.getElementById("icon-moon");
+
+      function applyTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('uon-theme', theme);
+        if (theme === 'dark') {
+          iconSun.style.display = 'block';
+          iconMoon.style.display = 'none';
+        } else {
+          iconSun.style.display = 'none';
+          iconMoon.style.display = 'block';
+        }
+      }
+
+      const activeTheme = document.documentElement.getAttribute('data-theme') ||
+        (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      applyTheme(activeTheme);
+
+      themeBtn.addEventListener("click", () => {
+        const newTheme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        applyTheme(newTheme);
+      });
+    });
+  </script>
+</body>
+
+</html>

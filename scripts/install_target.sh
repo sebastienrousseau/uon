@@ -17,27 +17,29 @@
 
 set -eo pipefail
 
-TARGET_USER="${1:-root}"
-TARGET_HOME=$(eval echo "~$TARGET_USER")
-SSH_DIR="$TARGET_HOME/.ssh"
-AUTH_KEYS="$SSH_DIR/authorized_keys"
-CONFIG_DIR="$TARGET_HOME/.config/uon"
+function main() {
+    local TARGET_USER="${1:-root}"
+    local TARGET_HOME
+    TARGET_HOME=$(eval echo "~$TARGET_USER")
+    local SSH_DIR="$TARGET_HOME/.ssh"
+    local AUTH_KEYS="$SSH_DIR/authorized_keys"
+    local CONFIG_DIR="$TARGET_HOME/.config/uon"
 
-VERIFIER_DEST="/usr/local/bin/uon_verifier.py"
-SSHD_CONFIG_FILE="/etc/ssh/sshd_config"
+    local VERIFIER_DEST="/usr/local/bin/uon_verifier.py"
+    local SSHD_CONFIG_FILE="/etc/ssh/sshd_config"
 
-# Optional Subnet Constraint (Archived for future strict `Match Address` parsing)
-# SUBNET="${2:-192.168.0.0/16}"
+    # Optional Subnet Constraint (Archived for future strict `Match Address` parsing)
+    # local SUBNET="${2:-192.168.0.0/16}"
 
-# Textual Output Formatting
-RED='\037[0;31m'
-GREEN='\037[0;32m'
-YELLOW='\037[1;33m'
-NC='\037[0m' # No Color
+    # Textual Output Formatting
+    local RED='\037[0;31m'
+    local GREEN='\037[0;32m'
+    local YELLOW='\037[1;33m'
+    local NC='\037[0m' # No Color
 
-function print_step() { echo -e "${GREEN}==> $1${NC}"; }
-function print_warn() { echo -e "${YELLOW}[!] $1${NC}"; }
-function fail() { echo -e "${RED}[ERROR] $1${NC}" >&2; exit 1; }
+    function print_step() { echo -e "${GREEN}==> $1${NC}"; }
+    function print_warn() { echo -e "${YELLOW}[!] $1${NC}"; }
+    function fail() { echo -e "${RED}[ERROR] $1${NC}" >&2; exit 1; }
 
 # Prevent silent failures if the user doesn't exist
 if ! id "$TARGET_USER" >/dev/null 2>&1; then
@@ -64,7 +66,7 @@ print_step "Deploying Zero-Trust Verifier Payload to $VERIFIER_DEST"
 
 # In a production pip/curl deployment, we fetch the verifier natively from the release tree.
 # For local script execution, we assume it's in the same directory context or already pushed.
-VERIFIER_SOURCE="${VERIFIER_SOURCE:-scripts/uon_verifier.py}"
+    local VERIFIER_SOURCE="${VERIFIER_SOURCE:-scripts/uon_verifier.py}"
 
 if [[ -f "$VERIFIER_SOURCE" ]]; then
     cp "$VERIFIER_SOURCE" "$VERIFIER_DEST"
@@ -82,11 +84,11 @@ chown root:root "$VERIFIER_DEST"
 print_step "Injecting Verifier Hooks into $AUTH_KEYS"
 
 # The 2026 strict boundary prefix
-PREFIX='command="/usr/local/bin/uon_verifier.py",no-port-forwarding,no-X11-forwarding,no-agent-forwarding'
+    local PREFIX='command="/usr/local/bin/uon_verifier.py",no-port-forwarding,no-X11-forwarding,no-agent-forwarding'
 
-# Idempotently update the authorized_keys file.
-# If a line does not start with `command=`, we prepend our zero-trust hooks.
-tmp_keys=$(mktemp)
+    # Idempotently update the authorized_keys file.
+    # If a line does not start with `command=`, we prepend our zero-trust hooks.
+    local tmp_keys=$(mktemp)
 while IFS= read -r line; do
     if [[ "$line" =~ ^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp256) ]]; then
         echo "$PREFIX $line" >> "$tmp_keys"
@@ -111,8 +113,8 @@ chown "$TARGET_USER:$TARGET_USER" "$AUTH_KEYS"
 # ==============================================================================
 print_step "Hardening Host OpenSSH Daemon..."
 
-TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-BACKUP_SSHD="${SSHD_CONFIG_FILE}.uon-backup.${TIMESTAMP}"
+    local TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+    local BACKUP_SSHD="${SSHD_CONFIG_FILE}.uon-backup.${TIMESTAMP}"
 
 cp "$SSHD_CONFIG_FILE" "$BACKUP_SSHD"
 print_warn "Backed up prior SSH configuration to $BACKUP_SSHD"
@@ -139,3 +141,6 @@ else
     cp "$BACKUP_SSHD" "$SSHD_CONFIG_FILE"
     fail "SSHD configuration failed validation! Rolled back to $BACKUP_SSHD."
 fi
+}
+
+main "$@"

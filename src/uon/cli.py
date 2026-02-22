@@ -81,7 +81,16 @@ def main(ctx: click.Context, target: str | None, command: str | None) -> None:
     When invoked without a subcommand, the first positional argument is
     the target alias and the second is the shell command to execute.
     """
+    # If a valid subcommand (add, init, list, remove, register, policy) was invoked,
+    # let Click handle it exclusively.
     if ctx.invoked_subcommand is not None:
+        return
+
+    # If the provided 'target' matches an existing subcommand name but was parsed
+    # as an argument (due to Click's invoke_without_command ambiguity), route it manually.
+    subcommands = ctx.command.list_commands(ctx)
+    if target in subcommands:
+        ctx.invoke(ctx.command.get_command(ctx, target))
         return
 
     if target is None:
@@ -116,6 +125,23 @@ def add(alias: str, host: str, port: int, user: str) -> None:
     t = Target(alias=alias, host=host, port=port, user=user)
     store.add(t)
     click.echo(f"Target '{alias}' added ({user}@{host}:{port}).")
+
+
+@main.command(name="init")
+def init_wizard() -> None:
+    """Launch the interactive TUI onboarding wizard.
+    
+    This command guides you through registering a new remote target and
+    minting a Zero-Trust FIDO2 passkey in a beautiful terminal interface.
+    """
+    try:
+        from uon.ux.wizard import OnboardingWizard
+        app = OnboardingWizard()
+        app.run()
+    except ImportError as e:
+        click.echo(f"Error loading TUI components: {e}", err=True)
+        click.echo("Ensure you have installed the optional dependencies: pip install uon[ux]")
+        raise SystemExit(1) from e
 
 
 @main.command(name="list")
