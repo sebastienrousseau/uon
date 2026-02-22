@@ -147,22 +147,16 @@ nav {
   height: 100%;
 }
 
-.logo-rune {
-  display: flex;
-  align-items: center;
+.logo {
+  font-weight: 900;
+  font-size: 1.75rem;
+  letter-spacing: -0.06em;
+  color: var(--text-main);
   text-decoration: none;
 }
 
-.logo-rune svg {
-  width: 96px;
-  height: 96px;
-  fill: var(--text-main);
-  transition: transform 0.3s cubic-bezier(0.19, 1, 0.22, 1), fill 0.3s ease;
-}
-
-.logo-rune:hover svg {
-  fill: var(--brand-color);
-  transform: scale(1.05);
+.logo span {
+  color: var(--brand-color);
 }
 
 .sr-only {
