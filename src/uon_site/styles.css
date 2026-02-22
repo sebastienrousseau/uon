@@ -7,7 +7,8 @@
    ========================================================================== */
 
 /* --- 1. CSS Variables & Theming (Twinby Bento UI) --- */
-:root {
+:root,
+:root[data-theme="light"] {
   --color-cyber-lime: #DFFF00;
   /* AAA Compliant on Dark */
   --color-deep-charcoal: #0D0D11;
@@ -26,7 +27,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg-color: var(--color-deep-charcoal);
     --text-main: #FFFFFF;
     --text-muted: #A0A0AB;
@@ -38,6 +39,17 @@
     /* Faint cyber lime ambient glow */
     --btn-text: #0D0D11;
   }
+}
+
+:root[data-theme="dark"] {
+  --bg-color: var(--color-deep-charcoal);
+  --text-main: #FFFFFF;
+  --text-muted: #A0A0AB;
+  --brand-color: var(--color-cyber-lime);
+  --card-bg: rgba(255, 255, 255, 0.02);
+  --glass-border: rgba(255, 255, 255, 0.04);
+  --blob-glow: rgba(223, 255, 0, 0.08);
+  --btn-text: #0D0D11;
 }
 
 /* --- 2. CSS Reset & Typography --- */
@@ -171,16 +183,42 @@ nav {
   border-width: 0;
 }
 
+.nav-icon-btn {
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-icon-btn svg {
+  width: 28px;
+  height: 28px;
+  transition: transform 0.3s cubic-bezier(0.19, 1, 0.22, 1), stroke 0.3s ease, fill 0.3s ease;
+}
+
+.nav-icon-btn:hover svg {
+  transform: scale(1.1) rotate(5deg);
+}
+
 .github-link svg {
   fill: var(--text-main);
-  width: 32px;
-  height: 32px;
-  transition: transform 0.3s cubic-bezier(0.19, 1, 0.22, 1), fill 0.3s ease;
+  stroke: none !important;
 }
 
 .github-link:hover svg {
-  transform: scale(1.1) rotate(5deg);
   fill: var(--brand-color);
+}
+
+#theme-toggle svg {
+  stroke: var(--text-main);
+  fill: none;
+}
+
+#theme-toggle:hover svg {
+  stroke: var(--brand-color);
 }
 
 /* --- 6. Hero Section (Twinby Bold) --- */
