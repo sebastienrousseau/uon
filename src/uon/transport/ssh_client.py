@@ -45,7 +45,7 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
-import paramiko  # type: ignore[import-untyped]
+from uon import core  # type: ignore[import-untyped,import-not-found]
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 # ---------------------------------------------------------------------------
@@ -119,51 +119,7 @@ def generate_challenge() -> ChallengePacket:
     return ChallengePacket(nonce=nonce, session_id=session_id)
 
 
-# ---------------------------------------------------------------------------
-# SSH connection helpers
-# ---------------------------------------------------------------------------
-
-
-def _connect(host: str, port: int, username: str) -> paramiko.SSHClient:
-    """Open an unauthenticated SSH connection for the initial challenge exchange.
-
-    This helper is used during the pre-authentication phase where the
-    client and target agree on a nonce.  Key-based and agent-based
-    authentication are explicitly disabled (``look_for_keys=False``,
-    ``allow_agent=False``) because the connection carries no signed
-    payload yet.
-
-    Args:
-        host:     Hostname or IPv4 address of the target.
-        port:     SSH port number.
-        username: Remote username.
-
-    Returns:
-        A connected ``paramiko.SSHClient`` ready for channel operations.
-
-    Raises:
-        paramiko.SSHException: If the connection or transport negotiation
-            fails (network timeout, refused connection, etc.).
-
-    Security:
-        Host keys are accepted on first contact (Trust-On-First-Use /
-        ``AutoAddPolicy``).  A future release will pin host keys in the
-        uon config store.
-    """
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # noqa: S507 — TOFU
-    client.connect(
-        hostname=host,
-        port=port,
-        username=username,
-        look_for_keys=False,
-        allow_agent=False,
-        # We perform our own auth via exec channel; connect with none auth
-        # first.  The server should allow ``none`` for the initial exchange
-        # then require the signed payload for exec.
-        auth_timeout=10,
-    )
-    return client
+# _connect helper removed as paramiko is no longer used
 
 
 # ---------------------------------------------------------------------------
@@ -240,38 +196,19 @@ def execute_signed(
         * The channel ``exec_command`` timeout is 300 seconds.
     """
     envelope = _build_envelope(command, assertion, challenge)
-
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # noqa: S507
+    wrapped_command = _wrap_command(envelope)
 
     try:
-        # Connect with key-based auth.  The target's authorized_keys file
-        # will have the FIDO2 public key.  We pass the signed envelope as
-        # the command so the server-side ``ForceCommand`` or agent can
-        # verify before executing.
-        client.connect(
-            hostname=host,
-            port=port,
-            username=username,
-            look_for_keys=True,
-            allow_agent=True,
-            timeout=10,
+        exit_code, stdout, stderr = core.execute_signed_rust(
+            host, port, username, wrapped_command
         )
-
-        # Send the envelope as an exec request.  The remote uon-agent (or
-        # a ``ForceCommand`` script) parses the JSON preamble, verifies the
-        # FIDO2 signature, and — only then — runs the inner command.
-        wrapped_command = _wrap_command(envelope)
-        _stdin, stdout, stderr = client.exec_command(wrapped_command, timeout=300)
-
-        exit_code = stdout.channel.recv_exit_status()
         return ExecResult(
             exit_code=exit_code,
-            stdout=stdout.read().decode(errors="replace"),
-            stderr=stderr.read().decode(errors="replace"),
+            stdout=stdout,
+            stderr=stderr,
         )
-    finally:
-        client.close()
+    except Exception as e:
+        raise OSError(f"SSH execution failed: {e}") from e
 
 
 # ---------------------------------------------------------------------------

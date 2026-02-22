@@ -14,7 +14,6 @@ from uon.transport.ssh_client import (
     ChallengePacket,
     ExecResult,
     _build_envelope,
-    _connect,
     _wrap_command,
     execute_signed,
     generate_challenge,
@@ -78,24 +77,7 @@ class TestRequestChallenge:
         assert len(cp.nonce) == 32
 
 
-# ── _connect() ───────────────────────────────────────────────────────
 
-
-class TestConnect:
-    @patch("uon.transport.ssh_client.paramiko.SSHClient")
-    def test_returns_client(self, mock_ssh_cls: MagicMock) -> None:
-        mock_client = mock_ssh_cls.return_value
-        result = _connect("example.com", 22, "root")
-        assert result is mock_client
-        mock_client.set_missing_host_key_policy.assert_called_once()
-        mock_client.connect.assert_called_once_with(
-            hostname="example.com",
-            port=22,
-            username="root",
-            look_for_keys=False,
-            allow_agent=False,
-            auth_timeout=10,
-        )
 
 
 # ── _build_envelope() ────────────────────────────────────────────────
@@ -138,35 +120,23 @@ class TestWrapCommand:
 
 
 class TestExecuteSigned:
-    @patch("uon.transport.ssh_client.paramiko.SSHClient")
-    def test_success(self, mock_ssh_cls: MagicMock) -> None:
-        client = mock_ssh_cls.return_value
-        stdout_chan = MagicMock()
-        stdout_chan.recv_exit_status.return_value = 0
-        stdout_mock = MagicMock()
-        stdout_mock.read.return_value = b"result\n"
-        stdout_mock.channel = stdout_chan
-        stderr_mock = MagicMock()
-        stderr_mock.read.return_value = b""
-        client.exec_command.return_value = (MagicMock(), stdout_mock, stderr_mock)
-
+    @patch("uon.transport.ssh_client.core.execute_signed_rust")
+    def test_success(self, mock_rust: MagicMock) -> None:
+        mock_rust.return_value = (0, "result\n", "")
         challenge = ChallengePacket(nonce=b"\x00" * 32, session_id=b"\x00" * 32)
         result = execute_signed("h", 22, "root", "ls", {"s": "1"}, challenge)
 
         assert result.exit_code == 0
         assert result.stdout == "result\n"
-        client.close.assert_called_once()
+        mock_rust.assert_called_once()
 
-    @patch("uon.transport.ssh_client.paramiko.SSHClient")
-    def test_close_on_error(self, mock_ssh_cls: MagicMock) -> None:
-        client = mock_ssh_cls.return_value
-        client.connect.side_effect = OSError("refused")
-
+    @patch("uon.transport.ssh_client.core.execute_signed_rust")
+    def test_close_on_error(self, mock_rust: MagicMock) -> None:
+        mock_rust.side_effect = Exception("refused")
         challenge = ChallengePacket(nonce=b"\x00" * 32, session_id=b"\x00" * 32)
-        with pytest.raises(OSError, match="refused"):
+        with pytest.raises(OSError, match="SSH execution failed: refused"):
             execute_signed("h", 22, "root", "ls", {}, challenge)
-
-        client.close.assert_called_once()
+        mock_rust.assert_called_once()
 
 
 # ── verify_assertion_locally() ────────────────────────────────────────
