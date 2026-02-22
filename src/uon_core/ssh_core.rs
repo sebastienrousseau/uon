@@ -10,6 +10,7 @@ use russh::client::Handler;
 use russh::ChannelMsg;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
+use tokio_vsock::VsockStream;
 
 #[derive(Serialize)]
 struct FidoAssertionDto {
@@ -187,11 +188,28 @@ pub fn execute_session(
         config.preferred.kex = vec![russh::kex::CURVE25519].into();
         let config = Arc::new(config);
 
-        let mut session =
+        let mut session = if host.starts_with("vsock:") {
+            let cid_str = host.trim_start_matches("vsock:");
+            let cid: u32 = match cid_str.parse() {
+                Ok(c) => c,
+                Err(_) => return Err(PyRuntimeError::new_err("Invalid VSOCK CID metadata")),
+            };
+
+            let stream = match VsockStream::connect(tokio_vsock::VsockAddr::new(cid, port.into())).await {
+                Ok(s) => s,
+                Err(e) => return Err(PyRuntimeError::new_err(format!("VSOCK transport connect error: {}", e))),
+            };
+            
+            match russh::client::connect_stream(config, stream, ClientHandler).await {
+                Ok(s) => s,
+                Err(e) => return Err(PyRuntimeError::new_err(format!("SSH connect stream error: {}", e))),
+            }
+        } else {
             match russh::client::connect(config, (host.as_str(), port), ClientHandler).await {
                 Ok(s) => s,
                 Err(e) => return Err(PyRuntimeError::new_err(format!("SSH connect error: {}", e))),
-            };
+            }
+        };
 
         // Note: Real implementations will orchestrate `russh-keys` to negotiate agent keys.
         // We simulate basic or no-auth connection here for the ForceCommand execution context.

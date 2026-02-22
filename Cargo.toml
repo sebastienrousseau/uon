@@ -28,6 +28,7 @@ pyo3 = { version = "0.24.1", features = ["extension-module"] }
 russh = "0.45.0"
 russh-keys = "0.45.0"
 tokio = { version = "1.37.0", features = ["full", "net"] }
+tokio-vsock = "0.7.2"
 libc = "0.2"
 zeroize = { version = "1.8.1", features = ["zeroize_derive"] }
 anyhow = "1.0"
