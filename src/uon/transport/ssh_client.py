@@ -45,8 +45,9 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
-from uon import core  # type: ignore[import-untyped,import-not-found]
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+from uon import core  # type: ignore[import-untyped,import-not-found]
 
 # ---------------------------------------------------------------------------
 # Data containers
@@ -268,8 +269,13 @@ def _wrap_command(envelope: dict[str, Any]) -> str:
     Returns:
         A string in the format ``"__UON_EXEC__ <base64>"``.
     """
-    payload_b64 = base64.b64encode(json.dumps(envelope, separators=(",", ":")).encode()).decode()
-    return f"__UON_EXEC__ {payload_b64}"
+    from uon.transport.pqc import PQCHybridWrapper
+
+    payload_json = json.dumps(envelope, separators=(",", ":"))
+    pqc = PQCHybridWrapper()
+    crypto_payload = pqc.encapsulate_envelope(payload_json)
+    
+    return f"__UON_EXEC__ {crypto_payload}"
 
 
 def verify_assertion_locally(

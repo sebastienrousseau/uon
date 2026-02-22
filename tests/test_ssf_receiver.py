@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Sebastien Rousseau
-# 
+#
 # Licensed under the MIT License. See LICENSE file in the project root
 # for full license information.
 
@@ -7,11 +7,12 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock, patch
+
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock
 
-from uon.auth.ssf_receiver import app, RISC_ACCOUNT_DISABLED
+from uon.auth.ssf_receiver import RISC_ACCOUNT_DISABLED, app
 
 
 @pytest.fixture
@@ -38,7 +39,7 @@ class TestSSFReceiver:
         response = client.post("/ssf/events", json=payload)
         assert response.status_code == 200
         assert response.json()["status"] == "accepted"
-        
+
         # Verify pkill was called to terminate sessions
         mock_run.assert_called_once()
         args = mock_run.call_args[0][0]
@@ -69,7 +70,7 @@ class TestSSFReceiver:
         mock_parse.side_effect = ValueError("Simulated Bad JSON")
         response = client.post("/ssf/events", content=b"{}")
         assert response.status_code == 400
-        
+
     @patch("uon.auth.ssf_receiver.core.parse_ssf_event")
     def test_explicit_internal_error(self, mock_parse: MagicMock, client: TestClient) -> None:
         mock_parse.side_effect = Exception("Simulated Core Panic")

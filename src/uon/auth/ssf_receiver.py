@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Sebastien Rousseau
-# 
+#
 # Licensed under the MIT License. See LICENSE file in the project root
 # for full license information.
 
@@ -13,8 +13,6 @@ this service instantly triggers dynamic teardown of active uon pipelines.
 from __future__ import annotations
 
 import logging
-import os
-import signal
 import subprocess
 from typing import Any
 
@@ -50,20 +48,21 @@ def kill_uon_sessions(subject_identifier: str) -> None:
 
 from uon import core  # type: ignore[import-untyped,import-not-found]
 
+
 @app.post("/ssf/events")
 async def receive_ssf_event(request: Request) -> dict[str, str]:
     """Ingest a Security Event Token from the IdP stream natively parsed in Rust."""
     try:
         body_bytes = await request.body()
         payload = body_bytes.decode("utf-8")
-        
+
         # Rust core handles parsing and extraction instantly without Pydantic overhead
         identifier = core.parse_ssf_event(payload)  # type: ignore[attr-defined]
-        
+
         if identifier is not None:
             kill_uon_sessions(identifier)
             return {"status": "accepted"}
-            
+
         return {"status": "ignored", "reason": "event_type_not_actionable"}
     except ValueError as e:
         logging.error(f"Invalid SSF payload: {e}")

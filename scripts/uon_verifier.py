@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Sebastien Rousseau
-# 
+#
 # Licensed under the MIT License. See LICENSE file in the project root
 # for full license information.
 
@@ -11,11 +11,9 @@ signature against locally stored COSE public keys, and executes the
 payload only if verification succeeds.
 """
 
-import base64
 import hashlib
 import json
 import os
-import subprocess
 import sys
 from typing import Any
 
@@ -48,8 +46,14 @@ def verify_and_execute() -> None:
     # 2. Extract and Decode Payload
     try:
         encoded_payload = original_command.split(" ", 1)[1]
-        payload_json = base64.b64decode(encoded_payload).decode("utf-8")
-        payload = json.loads(payload_json)
+
+        # Phase 5 PQC Decapsulation (Hybrid wrapper)
+        from uon.transport.pqc import PQCHybridWrapper
+        pqc = PQCHybridWrapper()
+        decoded_payload = pqc.decapsulate_envelope(encoded_payload)
+
+        envelope = json.loads(decoded_payload)
+        payload = envelope
         command = payload["command"]
         assertion = payload["assertion"]
     except Exception as e:
@@ -117,7 +121,7 @@ def verify_and_execute() -> None:
     # command execution, process tracking, OS-conditional kernel bounds (eBPF/EndpointSecurity)
     # and teardown without Python GIL contention.
     from uon import core  # type: ignore[import-untyped]
-    
+
     try:
         # spawn_zsp_process performs: GroupAdd -> Spawn Sudo -> apply_ebpf_sandbox -> Wait -> GroupDel
         exit_code = core.spawn_zsp_process(command)

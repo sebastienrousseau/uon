@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Sebastien Rousseau
-# 
+#
 # Licensed under the MIT License. See LICENSE file in the project root
 # for full license information.
 
@@ -26,12 +26,12 @@ class PQCHybridWrapper:
     to inject a hybrid ML-KEM/X25519 key encapsulation into the payload
     before passing it to the Rust SSH layer.
     """
-    
+
     def __init__(self, shared_secret: bytes | None = None) -> None:
         # In a full deployment, this secret comes from an Open Quantum Safe ML-KEM negotiation.
         # For seamless build compatibility, we simulate the derived key derivation buffer.
         self._key = shared_secret or hashlib.sha256(os.urandom(32)).digest()
-        
+
     def encapsulate_envelope(self, envelope_json: str) -> str:
         """Encrypt and authenticate the FIDO2 envelope using AES-256-GCM.
         
@@ -40,12 +40,12 @@ class PQCHybridWrapper:
         """
         aesgcm = AESGCM(self._key)
         nonce = os.urandom(12)
-        
+
         # Associated data could be the CTAP origin or binding data
         aad = b"uon-v0.0.2-pqc-binding"
-        
+
         ciphertext = aesgcm.encrypt(nonce, envelope_json.encode("utf-8"), aad)
-        
+
         # Return a composite payload
         composite = nonce + ciphertext
         return base64.b64encode(composite).decode("ascii")
@@ -53,12 +53,12 @@ class PQCHybridWrapper:
     def decapsulate_envelope(self, pqc_payload: str) -> str:
         """Decrypt the quantum-resistant execution envelope."""
         composite = base64.b64decode(pqc_payload)
-        
+
         nonce = composite[:12]
         ciphertext = composite[12:]
-        
+
         aesgcm = AESGCM(self._key)
         aad = b"uon-v0.0.2-pqc-binding"
-        
+
         plaintext = aesgcm.decrypt(nonce, ciphertext, aad)
         return plaintext.decode("utf-8")

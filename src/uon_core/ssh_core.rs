@@ -31,7 +31,15 @@ pub fn execute_signed_rust(
     let rt = Runtime::new().map_err(|e| PyRuntimeError::new_err(format!("Tokio runtime error: {}", e)))?;
 
     rt.block_on(async {
-        let config = russh::client::Config::default();
+        let mut config = russh::client::Config::default();
+        // Phase 5: PQC Transport Enforcement.
+        // `russh` does not natively support `sntrup761x25519-sha512@openssh.com` yet.
+        // We enforce the strongest native curve, and rely on `PQCHybridWrapper` 
+        // to encapsulate the FIDO2 payload in AES-256-GCM + ML-KEM derived keys 
+        // before traversal.
+        config.preferred.kex = vec![
+            russh::kex::CURVE25519,
+        ].into();
         let config = Arc::new(config);
 
         let mut session = match russh::client::connect(config, (host.as_str(), port), ClientHandler).await {

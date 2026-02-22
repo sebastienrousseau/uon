@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Sebastien Rousseau
-# 
+#
 # Licensed under the MIT License. See LICENSE file in the project root
 # for full license information.
 
@@ -47,17 +47,17 @@ int restrict_execve(struct pt_regs *ctx, const char __user *filename) {
 
 class KernelMonitor:
     """Manages the lifecycle of the eBPF sandboxing environment."""
-    
+
     def __init__(self) -> None:
         self.bpf: BPF | None = None
         self._os = platform.system()
-        
+
     def attach(self) -> None:
         """Compile and attach the eBPF program to Linux kernel hooks."""
         if self._os != "Linux":
             logging.warning("eBPF monitoring is only supported on Linux kernels. Bypassing sandbox.")
             return
-            
+
         if not HAS_BCC:
             logging.warning("BCC library is unavailable. eBPF kernel monitoring is disabled.")
             return
