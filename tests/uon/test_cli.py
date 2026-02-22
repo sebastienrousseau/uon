@@ -28,7 +28,6 @@ from uon.cli import (
     register,
     remove,
 )
-from uon.transport.ssh_client import ExecResult
 from uon.utils.config import Credential, Target, TargetStore
 
 # ── helpers ──────────────────────────────────────────────────────────
@@ -242,9 +241,9 @@ class TestRunCommand:
         with pytest.raises(SystemExit):
             _run_command("dev", "ls")
 
-    @patch("uon.cli.execute_signed")
+    @patch("uon.cli.core.execute_session")
     @patch("uon.cli._resolve_signature")
-    @patch("uon.cli.request_challenge")
+    @patch("uon.cli.core.generate_challenge")
     def test_full_success(
         self,
         mock_challenge: MagicMock,
@@ -256,11 +255,14 @@ class TestRunCommand:
         t = Target(alias="dev", host="10.0.0.1", credentials=[Credential(id="Y3JlZA==")])
         store.add(t)
 
-        from uon.transport.ssh_client import ChallengePacket
-
-        mock_challenge.return_value = ChallengePacket(nonce=b"\x00" * 32, session_id=b"\x01" * 32)
-        mock_resolve.return_value = {"sig": "ok"}
-        mock_exec.return_value = ExecResult(exit_code=0, stdout="done\n", stderr="")
+        mock_challenge.return_value = (b"\x00" * 32, b"\x01" * 32)
+        
+        from uon.contracts.fido_dto import FidoAssertionDto
+        mock_resolve.return_value = FidoAssertionDto(
+            credential_id=b"cid", auth_data=b"ad", client_data=b"cd", signature=b"sig"
+        )
+        
+        mock_exec.return_value = (0, "done\n", "")
 
         with pytest.raises(SystemExit) as exc_info:
             _run_command("dev", "uptime")
@@ -339,31 +341,31 @@ class TestResolveSignature:
 
 class TestPrintResult:
     def test_stdout_only(self, capsys: pytest.CaptureFixture[str]) -> None:
-        _print_result(ExecResult(exit_code=0, stdout="hello\n", stderr=""))
+        _print_result("hello\n", "")
         captured = capsys.readouterr()
         assert captured.out == "hello\n"
         assert captured.err == ""
 
     def test_stderr_only(self, capsys: pytest.CaptureFixture[str]) -> None:
-        _print_result(ExecResult(exit_code=1, stdout="", stderr="oops\n"))
+        _print_result("", "oops\n")
         captured = capsys.readouterr()
         assert captured.out == ""
         assert captured.err == "oops\n"
 
     def test_both(self, capsys: pytest.CaptureFixture[str]) -> None:
-        _print_result(ExecResult(exit_code=0, stdout="out\n", stderr="err\n"))
+        _print_result("out\n", "err\n")
         captured = capsys.readouterr()
         assert "out" in captured.out
         assert "err" in captured.err
 
     def test_no_trailing_newline(self, capsys: pytest.CaptureFixture[str]) -> None:
-        _print_result(ExecResult(exit_code=0, stdout="no-nl", stderr="no-nl"))
+        _print_result("no-nl", "no-nl")
         captured = capsys.readouterr()
         assert captured.out.endswith("\n")
         assert captured.err.endswith("\n")
 
     def test_empty(self, capsys: pytest.CaptureFixture[str]) -> None:
-        _print_result(ExecResult(exit_code=0, stdout="", stderr=""))
+        _print_result("", "")
         captured = capsys.readouterr()
         assert captured.out == ""
         assert captured.err == ""
