@@ -1,6 +1,6 @@
 # Copyright (c) 2024 Sebastien Rousseau
 #
-# Licensed under the MIT License. See LICENSE file in the project root
+# Licensed under the GNU AGPLv3 License. See LICENSE file in the project root
 # for full license information.
 
 """QR-code fallback bridge for FIDO2 signing via a mobile device.
@@ -60,6 +60,8 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
+
+from uon.contracts.fido_dto import FidoAssertionDto
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -412,7 +414,7 @@ def request_signature_via_qr(
     rp_id: str,
     credential_ids: list[bytes],
     timeout: float = BRIDGE_TIMEOUT_SECONDS,
-) -> dict[str, Any]:
+) -> FidoAssertionDto:
     """Display a QR code and wait for a mobile device to sign the challenge.
 
     This is the public entry point for the QR bridge fallback.  It
@@ -492,4 +494,9 @@ def request_signature_via_qr(
         raise RuntimeError(f"QR bridge error: {result.error}")
 
     assert result.assertion_json is not None  # noqa: S101 — guaranteed by event
-    return result.assertion_json
+    return FidoAssertionDto(
+        credential_id=base64.b64decode(result.assertion_json["credentialId"]),
+        auth_data=base64.b64decode(result.assertion_json["authenticatorData"]),
+        client_data=base64.b64decode(result.assertion_json["clientDataJSON"]),
+        signature=base64.b64decode(result.assertion_json["signature"]),
+    )

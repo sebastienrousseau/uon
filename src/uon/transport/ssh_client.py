@@ -1,6 +1,6 @@
 # Copyright (c) 2024 Sebastien Rousseau
 #
-# Licensed under the MIT License. See LICENSE file in the project root
+# Licensed under the GNU AGPLv3 License. See LICENSE file in the project root
 # for full license information.
 
 """Paramiko-based SSH transport for FIDO2-signed command execution.
@@ -40,13 +40,13 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import json
 import os
 from dataclasses import dataclass
-from typing import Any
 
-import paramiko  # type: ignore[import-untyped]
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+from uon import core  # type: ignore[import-untyped,import-not-found]
+from uon.contracts.fido_dto import FidoAssertionDto, SecureEnvelopeDto
 
 # ---------------------------------------------------------------------------
 # Data containers
@@ -119,51 +119,7 @@ def generate_challenge() -> ChallengePacket:
     return ChallengePacket(nonce=nonce, session_id=session_id)
 
 
-# ---------------------------------------------------------------------------
-# SSH connection helpers
-# ---------------------------------------------------------------------------
-
-
-def _connect(host: str, port: int, username: str) -> paramiko.SSHClient:
-    """Open an unauthenticated SSH connection for the initial challenge exchange.
-
-    This helper is used during the pre-authentication phase where the
-    client and target agree on a nonce.  Key-based and agent-based
-    authentication are explicitly disabled (``look_for_keys=False``,
-    ``allow_agent=False``) because the connection carries no signed
-    payload yet.
-
-    Args:
-        host:     Hostname or IPv4 address of the target.
-        port:     SSH port number.
-        username: Remote username.
-
-    Returns:
-        A connected ``paramiko.SSHClient`` ready for channel operations.
-
-    Raises:
-        paramiko.SSHException: If the connection or transport negotiation
-            fails (network timeout, refused connection, etc.).
-
-    Security:
-        Host keys are accepted on first contact (Trust-On-First-Use /
-        ``AutoAddPolicy``).  A future release will pin host keys in the
-        uon config store.
-    """
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # noqa: S507 — TOFU
-    client.connect(
-        hostname=host,
-        port=port,
-        username=username,
-        look_for_keys=False,
-        allow_agent=False,
-        # We perform our own auth via exec channel; connect with none auth
-        # first.  The server should allow ``none`` for the initial exchange
-        # then require the signed payload for exec.
-        auth_timeout=10,
-    )
-    return client
+# _connect helper removed as paramiko is no longer used
 
 
 # ---------------------------------------------------------------------------
@@ -197,7 +153,7 @@ def execute_signed(
     port: int,
     username: str,
     command: str,
-    assertion: dict[str, Any],
+    assertion: FidoAssertionDto,
     challenge: ChallengePacket,
 ) -> ExecResult:
     """Execute a signed command on the remote target over SSH.
@@ -213,10 +169,9 @@ def execute_signed(
         port:      SSH port number.
         username:  Remote username.
         command:   The shell command to execute on the remote machine.
-        assertion: FIDO2 assertion dict with base64-encoded fields
-                   (``credentialId``, ``authenticatorData``,
-                   ``clientDataJSON``, ``signature``).  Produced by
-                   either the local authenticator or the QR bridge.
+        assertion: FIDO2 assertion DTO containing the hardware signature
+                   and authenticator data. Produced by the local authenticator
+                   or the QR bridge.
         challenge: The ``ChallengePacket`` whose ``nonce`` was signed
                    by the authenticator.
 
@@ -240,38 +195,17 @@ def execute_signed(
         * The channel ``exec_command`` timeout is 300 seconds.
     """
     envelope = _build_envelope(command, assertion, challenge)
-
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # noqa: S507
+    wrapped_command = _wrap_command(envelope)
 
     try:
-        # Connect with key-based auth.  The target's authorized_keys file
-        # will have the FIDO2 public key.  We pass the signed envelope as
-        # the command so the server-side ``ForceCommand`` or agent can
-        # verify before executing.
-        client.connect(
-            hostname=host,
-            port=port,
-            username=username,
-            look_for_keys=True,
-            allow_agent=True,
-            timeout=10,
-        )
-
-        # Send the envelope as an exec request.  The remote uon-agent (or
-        # a ``ForceCommand`` script) parses the JSON preamble, verifies the
-        # FIDO2 signature, and — only then — runs the inner command.
-        wrapped_command = _wrap_command(envelope)
-        _stdin, stdout, stderr = client.exec_command(wrapped_command, timeout=300)
-
-        exit_code = stdout.channel.recv_exit_status()
+        exit_code, stdout, stderr = core.execute_signed_rust(host, port, username, wrapped_command)
         return ExecResult(
             exit_code=exit_code,
-            stdout=stdout.read().decode(errors="replace"),
-            stderr=stderr.read().decode(errors="replace"),
+            stdout=stdout,
+            stderr=stderr,
         )
-    finally:
-        client.close()
+    except Exception as e:
+        raise OSError(f"SSH execution failed: {e}") from e
 
 
 # ---------------------------------------------------------------------------
@@ -281,9 +215,9 @@ def execute_signed(
 
 def _build_envelope(
     command: str,
-    assertion: dict[str, Any],
+    assertion: FidoAssertionDto,
     challenge: ChallengePacket,
-) -> dict[str, Any]:
+) -> SecureEnvelopeDto:
     """Bundle the command, assertion, and challenge into a versioned JSON envelope.
 
     The envelope is the atomic unit of trust in the uon protocol.  The
@@ -293,24 +227,25 @@ def _build_envelope(
 
     Args:
         command:   Shell command string.
-        assertion: Base64-encoded FIDO2 assertion fields.
+        assertion: The strictly validated `FidoAssertionDto`.
         challenge: The ``ChallengePacket`` whose nonce was signed.
 
     Returns:
-        A dict with keys ``version`` (``1``), ``command``,
-        ``challenge`` (base64), ``session_id`` (base64), and
-        ``assertion``.
+        A strictly validated `SecureEnvelopeDto` encapsulating the command and signature logic.
     """
-    return {
-        "version": 1,
-        "command": command,
-        "challenge": base64.b64encode(challenge.nonce).decode(),
-        "session_id": base64.b64encode(challenge.session_id).decode(),
-        "assertion": assertion,
-    }
+    # Parse shell command string into a POSIX array for the DTO
+    import shlex
+
+    command_array = shlex.split(command)
+
+    return SecureEnvelopeDto(
+        session_id=base64.b64encode(challenge.session_id).decode(),
+        command=command_array,
+        assertion=assertion,
+    )
 
 
-def _wrap_command(envelope: dict[str, Any]) -> str:
+def _wrap_command(envelope: SecureEnvelopeDto) -> str:
     """Encode the envelope as a single shell-safe command string.
 
     Compact-JSON-encodes the envelope, base64-encodes the result, and
@@ -326,13 +261,18 @@ def _wrap_command(envelope: dict[str, Any]) -> str:
     the FIDO2 assertion, and only then ``exec``'s the inner command.
 
     Args:
-        envelope: The dict produced by ``_build_envelope()``.
+        envelope: The strictly validated `SecureEnvelopeDto` produced by ``_build_envelope()``.
 
     Returns:
         A string in the format ``"__UON_EXEC__ <base64>"``.
     """
-    payload_b64 = base64.b64encode(json.dumps(envelope, separators=(",", ":")).encode()).decode()
-    return f"__UON_EXEC__ {payload_b64}"
+    from uon.transport.pqc import PQCHybridWrapper
+
+    payload_json = envelope.model_dump_json(exclude_none=True)
+    pqc = PQCHybridWrapper()
+    crypto_payload = pqc.encapsulate_envelope(payload_json)
+
+    return f"__UON_EXEC__ {crypto_payload}"
 
 
 def verify_assertion_locally(

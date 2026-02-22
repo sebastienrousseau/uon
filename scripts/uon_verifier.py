@@ -1,3 +1,8 @@
+# Copyright (c) 2026 Sebastien Rousseau
+#
+# Licensed under the GNU AGPLv3 License. See LICENSE file in the project root
+# for full license information.
+
 #!/usr/bin/env python3
 """uon Target Verifier.
 
@@ -6,11 +11,9 @@ signature against locally stored COSE public keys, and executes the
 payload only if verification succeeds.
 """
 
-import base64
 import hashlib
 import json
 import os
-import subprocess
 import sys
 from typing import Any
 
@@ -43,8 +46,15 @@ def verify_and_execute() -> None:
     # 2. Extract and Decode Payload
     try:
         encoded_payload = original_command.split(" ", 1)[1]
-        payload_json = base64.b64decode(encoded_payload).decode("utf-8")
-        payload = json.loads(payload_json)
+
+        # Phase 5 PQC Decapsulation (Hybrid wrapper)
+        from uon.transport.pqc import PQCHybridWrapper
+
+        pqc = PQCHybridWrapper()
+        decoded_payload = pqc.decapsulate_envelope(encoded_payload)
+
+        envelope = json.loads(decoded_payload)
+        payload = envelope
         command = payload["command"]
         assertion = payload["assertion"]
     except Exception as e:
@@ -105,11 +115,21 @@ def verify_and_execute() -> None:
         )
         sys.exit(1)
 
-    # 5. Execution — command is verified by hardware-backed signature
+    # 5. Execution — Zero Standing Privilege (ZSP) Dynamic Profiling Natively in Rust
+    # Instead of exposing process spawning vulnerabilities via Python's subprocess,
+    # we dispatch the workload to the core C-extension runtime.
+    # The Rust runtime orchestrates the Just-In-Time ephemeral group allocation,
+    # command execution, process tracking, OS-conditional kernel bounds (eBPF/EndpointSecurity)
+    # and teardown without Python GIL contention.
+    from uon import core  # type: ignore[import-untyped]
+
     try:
-        subprocess.run(command, shell=True, check=True)  # noqa: S602 — post-verification exec
-    except subprocess.CalledProcessError as e:
-        sys.exit(e.returncode)
+        # spawn_zsp_process performs: GroupAdd -> Spawn Sudo -> apply_ebpf_sandbox -> Wait -> GroupDel
+        exit_code = core.spawn_zsp_process(command)
+        sys.exit(exit_code)
+    except Exception as e:
+        print(f"UON Verifier Error: ZSP Extractor exception - {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

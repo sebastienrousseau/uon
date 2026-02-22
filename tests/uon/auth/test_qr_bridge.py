@@ -1,3 +1,8 @@
+# Copyright (c) 2026 Sebastien Rousseau
+#
+# Licensed under the GNU AGPLv3 License. See LICENSE file in the project root
+# for full license information.
+
 """Tests for src.auth.qr_bridge — QR-code FIDO2 fallback bridge."""
 
 from __future__ import annotations
@@ -136,10 +141,10 @@ class TestBuildApp:
     def test_callback_valid(self) -> None:
         client, token, result = self._make_app()
         body = {
-            "credentialId": "abc",
-            "authenticatorData": "def",
-            "clientDataJSON": "ghi",
-            "signature": "jkl",
+            "credentialId": "YWJj",
+            "authenticatorData": "ZGVm",
+            "clientDataJSON": "Z2hp",
+            "signature": "amts",
         }
         resp = client.post(
             "/callback",
@@ -264,10 +269,10 @@ class TestRequestSignatureViaQr:
         mock_print_qr: MagicMock,
     ) -> None:
         assertion_data = {
-            "credentialId": "abc",
-            "authenticatorData": "def",
-            "clientDataJSON": "ghi",
-            "signature": "jkl",
+            "credentialId": "YWJj",
+            "authenticatorData": "ZGVm",
+            "clientDataJSON": "Z2hp",
+            "signature": "amts",
         }
 
         mock_thread = MagicMock()
@@ -287,7 +292,8 @@ class TestRequestSignatureViaQr:
                 timeout=5,
             )
 
-        assert result == assertion_data
+        assert result.credential_id == b"abc"
+        assert result.signature == b"jkl"
         mock_thread.start.assert_called_once()
         mock_thread.shutdown.assert_called_once()
 

@@ -1,3 +1,8 @@
+# Copyright (c) 2026 Sebastien Rousseau
+#
+# Licensed under the GNU AGPLv3 License. See LICENSE file in the project root
+# for full license information.
+
 """Tests for src.cli — Click CLI group, subcommands, core execution."""
 
 from __future__ import annotations
@@ -276,30 +281,35 @@ class TestResolveSignature:
         mock_auth.return_value = mock_response
 
         result = _resolve_signature(b"challenge", [b"cid"])
-        assert "credentialId" in result
-        assert "signature" in result
+        assert result.credential_id == b"cid"
+        assert result.signature == b"sig"
 
     @patch("uon.cli.request_signature_via_qr")
     @patch("uon.cli.fido_authenticate")
     def test_tier1_no_auth_falls_to_tier2(self, mock_auth: MagicMock, mock_qr: MagicMock) -> None:
         from uon.auth.fido_local import NoPlatformAuthenticatorError
+        from uon.contracts.fido_dto import FidoAssertionDto
 
         mock_auth.side_effect = NoPlatformAuthenticatorError("none")
-        mock_qr.return_value = {"credentialId": "qr-cid"}
+        expected_dto = FidoAssertionDto(credential_id=b"qr-cid", client_data=b"cd", auth_data=b"ad", signature=b"sig")
+        mock_qr.return_value = expected_dto
 
         result = _resolve_signature(b"c", [b"id"])
-        assert result == {"credentialId": "qr-cid"}
+        assert result == expected_dto
 
     @patch("uon.cli.request_signature_via_qr")
     @patch("uon.cli.fido_authenticate")
     def test_tier1_generic_error_falls_to_tier2(
         self, mock_auth: MagicMock, mock_qr: MagicMock
     ) -> None:
+        from uon.contracts.fido_dto import FidoAssertionDto
+        
         mock_auth.side_effect = ValueError("device error")
-        mock_qr.return_value = {"credentialId": "qr-cid"}
+        expected_dto = FidoAssertionDto(credential_id=b"qr-cid", client_data=b"cd", auth_data=b"ad", signature=b"sig")
+        mock_qr.return_value = expected_dto
 
         result = _resolve_signature(b"c", [b"id"])
-        assert result == {"credentialId": "qr-cid"}
+        assert result == expected_dto
 
     @patch("uon.cli.request_signature_via_qr")
     @patch("uon.cli.fido_authenticate")

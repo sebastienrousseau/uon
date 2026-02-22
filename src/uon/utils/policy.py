@@ -1,6 +1,6 @@
 # Copyright (c) 2024 Sebastien Rousseau
 #
-# Licensed under the MIT License. See LICENSE file in the project root
+# Licensed under the GNU AGPLv3 License. See LICENSE file in the project root
 # for full license information.
 
 """AAGUID-based attestation policy for FIDO2 credential enrollment.
@@ -149,14 +149,17 @@ class PolicyStore:
             ``None`` if the credential is allowed; a descriptive error
             string if it is rejected.
         """
-        if not self.is_enforcing:
-            return None
-
+        # Enterprise Attestation Strict Enforcement:
+        # Synced passkeys (Apple iCloud, Bitwarden) are inherently extractable and
+        # unconditionally violate the zero-trust hardware-bound mandate.
         if backup_eligible:
             return (
-                "Policy rejection: credential is backup-eligible (synced passkey). "
-                "Only hardware-bound credentials are allowed."
+                "Enterprise Attestation violation: credential is backup-eligible (synced passkey). "
+                "Only strictly hardware-bound credentials are permitted."
             )
+
+        if not self.is_enforcing:
+            return None
 
         if not self.is_allowed(aaguid):
             if aaguid == "00000000-0000-0000-0000-000000000000":

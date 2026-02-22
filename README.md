@@ -1,51 +1,50 @@
 # uon — FIDO2-Signed Remote Terminal Execution
 
-**uon** replaces password- and key-file-based SSH authentication with
-hardware-bound FIDO2 passkeys.  Every remote command is cryptographically
-signed by your device's Secure Enclave (Touch ID, Windows Hello, or a USB
-security key) before the target machine will execute it.  No private key
-material ever touches disk.
+**uon** replaces password- and key-file-based SSH authentication with hardware-bound FIDO2 passkeys, guaranteeing Zero-Trust execution bounds. Every remote command is cryptographically signed by your device's Secure Enclave (Touch ID, Windows Hello, or a USB security key) before the target machine will execute it. No private key material ever touches disk.
+
+---
+
+## Architecture & Mental Model
+
+### The Intent
+Traditional SSH lets anyone with a private key file run commands. If that file is stolen, the attacker asserts full access over your infrastructure. uon eliminates the static file entirely — your private key lives securely inside tamper-resistant hardware and can never be exported.
+
+### The Mental Model
+Think of `uon` as a cryptographic courier. Instead of unlocking a permanent shell, `uon` packages your literal command (e.g., `uptime`) into a Zero-Trust envelope, forces you to physically prove your presence via a hardware signature, and then transmits that verified envelope across the wire. 
+
+### Platform Constraints
+* **macOS**: Leverages Apple Secure Enclave & Touch ID natively.
+* **Windows**: Hooks into Windows Hello cryptography.
+* **Linux/WSL**: Negotiates physical USB security keys (YubiKey/SoloKey) directly.
 
 ---
 
 ## Table of Contents
 
-1. [How It Works](#how-it-works)
+1. [Architecture & Mental Model](#architecture--mental-model)
 2. [What You Need Before You Start](#what-you-need-before-you-start)
 3. [Terminology](#terminology)
-4. [Phase 1 — Set Up Your Controller (Your Laptop)](#phase-1--set-up-your-controller-your-laptop)
-5. [Phase 2 — Set Up Each Target (Remote Server)](#phase-2--set-up-each-target-remote-server)
+4. [Phase 1 — Set Up Your Controller](#phase-1--set-up-your-controller)
+5. [Phase 2 — Set Up Each Target](#phase-2--set-up-each-target)
 6. [Phase 3 — Test the Full Loop](#phase-3--test-the-full-loop)
 7. [CLI Reference](#cli-reference)
-8. [Architecture](#architecture)
-9. [Security Model](#security-model)
-10. [Troubleshooting](#troubleshooting)
-11. [Development](#development)
-12. [License](#license)
+8. [Security Model](#security-model)
+9. [Troubleshooting](#troubleshooting)
+10. [License](#license)
 
 ---
 
-## How It Works
+### The Execution Lifecycle
 
-Traditional SSH lets anyone with a private key file run commands.  If that
-file is stolen, the attacker has full access.  uon eliminates the file
-entirely — your private key lives inside tamper-resistant hardware
-(your laptop's Secure Enclave or a physical USB key) and can never be
-exported.
+Every time you run a command, `uon` enforces the following zero-trust flow:
 
-Every time you run a command, the flow is:
+1. **Local Invocation**: You cast `uon my-server "uptime"` on your laptop (the **controller**).
+2. **Hardware Signature**: `uon` drops into native bounds, asking your hardware to **sign** a one-time cryptographic challenge. You confirm with Touch ID, Windows Hello, or a YubiKey tap.
+3. **Transport**: The signed command travels over SSH to the **target** server.
+4. **Verifiable Telemetry**: The target's OpenSSH `ForceCommand` intercepts the payload. A specialized verifier mathematically confirms the signature originated from your physical hardware.
+5. **Execution & Teardown**: Upon validation, the kernel spins up an ephemeral execution group, executes your command, and streams the output directly back to your terminal.
 
-1. You type `uon my-server "uptime"` on your laptop (the **controller**).
-2. uon asks your hardware to **sign** a one-time challenge — you confirm
-   with Touch ID, Windows Hello, or a tap on your YubiKey.
-3. The signed command travels over SSH to the **target** server.
-4. The target's verifier script mathematically confirms the signature
-   came from your physical hardware before executing anything.
-5. The command output streams back to your terminal.
-
-If your laptop lid is closed or you have no USB key plugged in, uon
-automatically displays a **QR code** in your terminal.  You scan it with
-your phone, sign the challenge there, and the command proceeds.
+> **QR Fallback**: If your laptop lid is closed or you lack USB keys, `uon` automatically displays a **QR code** in your terminal. You scan it with your phone, sign the challenge securely, and the command proceeds.
 
 ---
 
@@ -306,170 +305,51 @@ mkdir -p ~/.config/uon
 
 ### Step 2.3 — Copy your public key to the target
 
-From your **controller** (your laptop), copy the public key file:
+From your **controller** (your laptop), copy the public key file to the target:
 
 ```bash
 # Run this on your CONTROLLER (laptop), not on the target
 scp ~/.config/uon/authorized_passkeys.json admin@192.168.1.50:~/.config/uon/
 ```
 
-Replace `admin@192.168.1.50` with the actual username and IP of your
-target.
+*(You should verify the key was copied successfully via `cat ~/.config/uon/authorized_passkeys.json` on the target).*
 
-Verify (on the target):
+### Step 2.4 — Execute the Automated Target Deployment
 
-```bash
-cat ~/.config/uon/authorized_passkeys.json
-```
+Traditionally, locking down a server involved manually injecting Python verifier hooks into `authorized_keys` and surgically hardening `sshd_config`. To massively accelerate **enterprise zero-trust adoption**, `uon` bundles a highly idempotent fleet-deployment script. 
 
-You should see a JSON array containing your key record with
-`credential_id_hex` and `cose_key_hex` fields.  These are **public**
-data — safe to transfer over the network.
-
-### Step 2.4 — Deploy the verifier script on the target
-
-The verifier is a Python script that intercepts every SSH command,
-checks the FIDO2 signature, and only executes the command if the
-signature is valid.
-
-From your **controller**, copy the verifier script to the target:
+Run the automated installer on the **target server** as `root` (or via `sudo`):
 
 ```bash
-# Run this on your CONTROLLER
-scp scripts/uon_verifier.py admin@192.168.1.50:/tmp/uon_verifier.py
+curl -sL https://raw.githubusercontent.com/sebastienrousseau/uon/main/scripts/install_target.sh | sudo bash -s -- <user> 
 ```
 
-Then, on the **target**, move it to a system-wide location:
+*(Replace `<user>` with the username you authenticate to, e.g., `admin` or `pi`).*
 
-```bash
-# Run these on the TARGET
-sudo cp /tmp/uon_verifier.py /usr/local/bin/uon_verifier.py
-sudo chmod +x /usr/local/bin/uon_verifier.py
-```
+**What the install script handles natively:**
+1. **Verifier Scaffolding:** Downloads the `uon_verifier.py` hook securely into `/usr/local/bin/`.
+2. **Payload Enforcement:** Idempotently hooks your `~/.ssh/authorized_keys` to intercept all connections natively via `command="/usr/local/bin/uon_verifier.py"`.
+3. **Daemon Hardening:** Strips legacy access controls inside `/etc/ssh/sshd_config` (disables password authentication, keyboards, and enforces verification).
+4. **Validation/Rollback:** Executes a strict `sshd -t` pre-flight check, immediately restoring target backups if the configuration fails to validate.
 
-Verify:
+> **Warning:** After hardening, traditional password login is permanently disabled.
 
-```bash
-/usr/local/bin/uon_verifier.py
-# Expected (on stderr): "UON Verifier Error: Missing or invalid UON envelope."
-# This is correct — it means the verifier is installed and running, but
-# no signed envelope was provided (because you ran it manually).
-```
+### Step 2.5 — Verify access before disconnecting
 
-### Step 2.5 — Link the verifier to your SSH key
-
-This is the critical step that tells OpenSSH to route every incoming
-command through the verifier.
-
-On the **target**, edit (or create) the `~/.ssh/authorized_keys` file.
-Find the line containing your existing SSH public key — it looks
-something like:
-
-```
-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample... user@laptop
-```
-
-**Prepend** the following restriction prefix to that line, so the
-complete line becomes:
-
-```
-command="/usr/local/bin/uon_verifier.py",no-port-forwarding,no-X11-forwarding,no-agent-forwarding ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample... user@laptop
-```
-
-**What each restriction does:**
-
-| Restriction                | Effect                                                                     |
-|----------------------------|----------------------------------------------------------------------------|
-| `command="…/uon_verifier.py"` | Every SSH session runs the verifier instead of a shell.  The original command is passed via `$SSH_ORIGINAL_COMMAND`. |
-| `no-port-forwarding`       | Prevents SSH tunnels — the key can only run commands, not forward ports.   |
-| `no-X11-forwarding`        | Prevents X11 display forwarding.                                           |
-| `no-agent-forwarding`      | Prevents SSH agent forwarding — your laptop's keys are not exposed.        |
-
-**How to edit the file:**
-
-```bash
-# On the TARGET
-nano ~/.ssh/authorized_keys
-# (or use vim, vi, or any editor you prefer)
-```
-
-Add the `command="...",...` prefix before `ssh-ed25519` (or `ssh-rsa`),
-all on one line.  Save and exit.
-
-> **Do not close your current SSH session yet.**  You will verify access
-> in Step 2.7 before disconnecting.
-
-### Step 2.6 — Harden the target's SSH configuration
-
-This step disables password login and other legacy authentication
-methods, so the only way to access the machine is through a
-FIDO2-signed uon command.
-
-From your **controller**, copy the hardening script:
-
-```bash
-# Run this on your CONTROLLER
-scp scripts/harden_target.sh admin@192.168.1.50:/tmp/harden_target.sh
-```
-
-On the **target**, run it as root:
-
-```bash
-# Run this on the TARGET
-sudo bash /tmp/harden_target.sh
-```
-
-The script:
-
-1. **Backs up** your current `/etc/ssh/sshd_config` (so you can undo if
-   needed).
-2. **Disables** password authentication, keyboard-interactive auth, and
-   empty passwords.
-3. **Enables** public-key authentication with physical-presence
-   verification (`PubkeyAuthOptions verify-required`).
-4. **Restricts** SSH to your local subnet (default `192.168.0.0/16`).
-   Pass a custom subnet as an argument:
-   `sudo bash /tmp/harden_target.sh 10.0.0.0/24`
-5. **Validates** the configuration with `sshd -t`.  If invalid, it
-   automatically restores the backup.
-6. **Restarts** the SSH daemon.
-
-The script is idempotent — you can safely re-run it.
-
-> **Warning:** After hardening, password login is permanently disabled.
-> If you have not set up uon correctly, you may lose access.  Always
-> verify access (Step 2.7) from a **second terminal** before closing
-> your current session.
-
-### Step 2.7 — Verify access before disconnecting
-
-Open a **new terminal window** on your controller (keep the old SSH
-session open as a safety net) and try:
+Open a **new terminal window** on your controller (keep the old SSH session open as a safety net) and try:
 
 ```bash
 uon home-server "whoami"
 ```
 
-You should see:
+You should see a biometric prompt (Touch ID / Hello / key tap), followed by your output user. If this works, your setup is completely finished.
 
-1. A biometric prompt (Touch ID / Hello / key tap).
-2. After approval, the output: `admin` (or whatever user you configured).
-
-If this works, your setup is complete.  You can safely close the old SSH
-session.
-
-**If it fails:** Go back to the open SSH session on the target and check:
-
-- Does `/usr/local/bin/uon_verifier.py` exist and is it executable?
-- Does `~/.config/uon/authorized_passkeys.json` exist and contain your key?
-- Is `~/.ssh/authorized_keys` formatted correctly (all on one line)?
-
-To undo hardening and restore password access:
+To manually undo hardening and restore password access (if you locked yourself out from your active session):
 
 ```bash
 # On the target, in your still-open session
 sudo cp /etc/ssh/sshd_config.uon-backup.* /etc/ssh/sshd_config
-sudo systemctl restart sshd   # or: sudo service sshd restart
+sudo systemctl restart sshd
 ```
 
 ---
@@ -537,24 +417,32 @@ self-destructs after one use or after 120 seconds.
 
 ### `uon <target> "<command>"`
 
-Execute a signed command on a registered target.
+Executes a signed command remotely on a registered target.
+
+#### # Examples
 
 ```bash
 uon my-server "uptime"
 uon my-server "cat /etc/hostname"
 ```
 
-**Exit code:** Matches the remote command's exit code (0 = success).
+#### # Errors
+* Returns standard exit code `> 0` natively aligning with the remote command's executed failure state.
+* Panics locally if the security envelope exceeds the hardware memory threshold or fails base64 transit.
 
 ### `uon add <alias> <host> [--port PORT] [--user USER]`
 
-Register a new target machine.  The target is stored locally in your
-config file.  If a target with the same alias exists, it is overwritten.
+Registers a new target machine definition persistently into the local Zero-Trust config store.
+
+#### # Examples
 
 ```bash
 uon add prod 10.0.0.5 --port 2222 --user deploy
 uon add pi 192.168.1.42 --user pi
 ```
+
+#### # Errors
+* Overwrites silently if a target with the same `<alias>` already exists in the store.
 
 | Option    | Default | Description                          |
 |-----------|---------|--------------------------------------|
@@ -563,7 +451,9 @@ uon add pi 192.168.1.42 --user pi
 
 ### `uon list`
 
-Show all registered targets and their enrolled credential counts.
+Enumerates all registered targets and their enrolled credential counts iteratively.
+
+#### # Examples
 
 ```bash
 $ uon list
@@ -573,12 +463,16 @@ $ uon list
 
 ### `uon register <alias> [--user-name NAME]`
 
-Enroll a FIDO2 passkey for a target.  Triggers a biometric or
-physical-touch prompt.  The target must already exist (via `uon add`).
+Enrolls a FIDO2 passkey for a specific target by triggering a biometric or physical-touch prompt natively at the hardware level.
+
+#### # Examples
 
 ```bash
 uon register prod
 ```
+
+#### # Errors
+* Panics returning `PyRuntimeError` if the specified `<alias>` target does not already exist.
 
 | Option         | Default                        | Description                           |
 |----------------|--------------------------------|---------------------------------------|
@@ -586,11 +480,16 @@ uon register prod
 
 ### `uon remove <alias>`
 
-Un-register a target.  Exits with code 1 if the alias does not exist.
+Un-registers a target securely from the state store.
+
+#### # Examples
 
 ```bash
 uon remove prod
 ```
+
+#### # Errors
+* Exits immediately with code `1` if the provided alias cannot be resolved.
 
 ---
 
@@ -841,4 +740,8 @@ poetry run pre-commit run --all-files
 
 ## License
 
-MIT
+[GNU Affero General Public License v3.0 (AGPLv3)](LICENSE)
+
+---
+Designed by Sebastien Rousseau — https://sebastienrousseau.com
+Engineered with Euxis — Enterprise Unified Execution Intelligence System — https://euxis.co

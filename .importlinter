@@ -1,0 +1,9 @@
+[importlinter]
+root_packages = uon
+
+[importlinter:contract:1]
+name = Cross-Domain Independence (No Lateral Imports)
+type = independence
+modules =
+    uon.auth
+    uon.transport

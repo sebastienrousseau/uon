@@ -1,0 +1,40 @@
+[package]
+name = "uon_core"
+version = "0.0.2"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+
+[lib]
+name = "uon_core"
+crate-type = ["cdylib"]
+path = "src/uon_core/lib.rs"
+
+[dependencies]
+# Standard cross-platform dependencies
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+base64 = "0.22"
+hex = "0.4.3"
+sha2 = "0.10.9"
+hmac = "0.12.1"
+# Desktop / Native conditional dependencies (PyO3, SSH, Tokio, OS threads)
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+ring = "0.17.14"
+uuid = { version = "1.21.0", features = ["v4"] }
+pyo3 = { version = "0.21.2", features = ["extension-module"] }
+russh = "0.45.0"
+russh-keys = "0.45.0"
+tokio = { version = "1.37.0", features = ["full", "net"] }
+libc = "0.2"
+zeroize = { version = "1.8.1", features = ["zeroize_derive"] }
+anyhow = "1.0"
+futures = "0.3"
+async-trait = "0.1"
+
+# Wasm conditional dependencies (Browser-based execution)
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+uuid = { version = "1.21.0", features = ["v4", "js"] }
+web-sys = { version = "0.3", features = ["Window", "Navigator", "CredentialsContainer", "PublicKeyCredential"] }
+console_error_panic_hook = "0.1"

@@ -1,3 +1,8 @@
+# Copyright (c) 2026 Sebastien Rousseau
+#
+# Licensed under the GNU AGPLv3 License. See LICENSE file in the project root
+# for full license information.
+
 """Shared fixtures for the uon test suite."""
 
 from __future__ import annotations

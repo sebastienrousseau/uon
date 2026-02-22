@@ -3,3 +3,6 @@
 # Licensed under the GNU AGPLv3 License. See LICENSE file in the project root
 # for full license information.
 
+from .ebpf_monitor import KernelMonitor
+
+__all__ = ["KernelMonitor"]

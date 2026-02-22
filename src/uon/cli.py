@@ -1,6 +1,6 @@
 # Copyright (c) 2024 Sebastien Rousseau
 #
-# Licensed under the MIT License. See LICENSE file in the project root
+# Licensed under the GNU AGPLv3 License. See LICENSE file in the project root
 # for full license information.
 
 """CLI entry point for uon -- FIDO2-signed remote terminal execution.
@@ -41,7 +41,6 @@ from __future__ import annotations
 import base64
 import os
 import sys
-from typing import Any
 
 import click
 
@@ -56,6 +55,7 @@ from uon.auth.fido_local import (
     register as fido_register,
 )
 from uon.auth.qr_bridge import request_signature_via_qr
+from uon.contracts.fido_dto import FidoAssertionDto
 from uon.transport.ssh_client import ExecResult, execute_signed, request_challenge
 from uon.utils.config import Credential, Target, TargetStore
 from uon.utils.policy import PolicyStore, is_valid_aaguid
@@ -331,7 +331,7 @@ def _run_command(target_alias: str, command: str) -> None:
 def _resolve_signature(
     challenge: bytes,
     credential_ids: list[bytes],
-) -> dict[str, Any]:
+) -> FidoAssertionDto:
     """Negotiate the strongest available FIDO2 signing method automatically.
 
     Implements a two-tier degradation strategy so that command signing
@@ -356,10 +356,9 @@ def _resolve_signature(
             ``register()`` calls stored in the ``TargetStore``.
 
     Returns:
-        A dict with four base64-encoded string values keyed as
-        ``credentialId``, ``authenticatorData``, ``clientDataJSON``,
-        and ``signature`` -- ready for JSON serialisation into the
-        ``__UON_EXEC__`` envelope.
+        A strictly validated `FidoAssertionDto` containing the signed
+        payload data (credential ID, authenticator data, client data, and signature),
+        ready for the transport layer.
 
     Raises:
         SystemExit(1): If **both** tiers fail.  Tier 2 failures
@@ -378,12 +377,12 @@ def _resolve_signature(
             challenge=challenge,
             credential_ids=credential_ids,
         )
-        return {
-            "credentialId": base64.b64encode(response.credential_id).decode(),  # type: ignore[attr-defined]
-            "authenticatorData": base64.b64encode(response.authenticator_data).decode(),
-            "clientDataJSON": base64.b64encode(response.client_data).decode(),
-            "signature": base64.b64encode(response.signature).decode(),
-        }
+        return FidoAssertionDto(
+            credential_id=response.credential_id,  # type: ignore[attr-defined]
+            auth_data=response.authenticator_data,
+            client_data=response.client_data,
+            signature=response.signature,
+        )
     except NoPlatformAuthenticatorError:
         click.echo("No local authenticator found — launching QR bridge …", err=True)
     except Exception as exc:
