@@ -10,6 +10,7 @@ use russh::client::Handler;
 use russh::ChannelMsg;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
+use tokio::net::UnixStream;
 use tokio_vsock::VsockStream;
 
 #[derive(Serialize)]
@@ -203,6 +204,19 @@ pub fn execute_session(
             match russh::client::connect_stream(config, stream, ClientHandler).await {
                 Ok(s) => s,
                 Err(e) => return Err(PyRuntimeError::new_err(format!("SSH connect stream error: {}", e))),
+            }
+        } else if host.starts_with("unix:") {
+            let socket_path = host.trim_start_matches("unix:");
+            
+            // Unix Domain Sockets serve as the host-side bridge for macOS VirtioSockets
+            let stream = match UnixStream::connect(socket_path).await {
+                Ok(s) => s,
+                Err(e) => return Err(PyRuntimeError::new_err(format!("VirtioSocket domain connect error: {}", e))),
+            };
+            
+            match russh::client::connect_stream(config, stream, ClientHandler).await {
+                Ok(s) => s,
+                Err(e) => return Err(PyRuntimeError::new_err(format!("SSH domain stream connect error: {}", e))),
             }
         } else {
             match russh::client::connect(config, (host.as_str(), port), ClientHandler).await {
