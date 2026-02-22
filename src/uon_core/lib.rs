@@ -36,6 +36,8 @@ mod ssh_core;
 mod wasm_bridge;
 #[cfg(not(target_arch = "wasm32"))]
 mod zsp_core;
+#[cfg(not(target_arch = "wasm32"))]
+mod macos_es;
 
 /// A Python module implemented in Rust.
 #[cfg(not(target_arch = "wasm32"))]
@@ -44,7 +46,8 @@ fn core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Phase 1 Bindings
     m.add_class::<fido2_core::SecureEnvelope>()?;
     m.add_function(wrap_pyfunction!(fido2_core::secure_envelope_memory, m)?)?;
-    m.add_function(wrap_pyfunction!(ssh_core::execute_signed_rust, m)?)?;
+    m.add_function(wrap_pyfunction!(ssh_core::execute_session, m)?)?;
+    m.add_function(wrap_pyfunction!(ssh_core::generate_challenge, m)?)?;
 
     // Phase 7 Bindings
     m.add_function(wrap_pyfunction!(amdns_core::compute_amdns_hmac, m)?)?;
@@ -55,6 +58,10 @@ fn core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Phase 8 Bindings (UX Interventions)
     m.add_function(wrap_pyfunction!(caep_intervention::freeze_execution, m)?)?;
     m.add_function(wrap_pyfunction!(caep_intervention::resume_execution, m)?)?;
+
+    // Phase 14 Bindings (v1.0.0 Hardware Integrations)
+    m.add_function(wrap_pyfunction!(macos_es::start_macos_es_tracing, m)?)?;
+    m.add_function(wrap_pyfunction!(macos_es::stop_macos_es_tracing, m)?)?;
 
     Ok(())
 }

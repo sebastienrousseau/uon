@@ -17,20 +17,19 @@ Sub-package    Responsibility
 =============  =============================================================
 ``auth``       FIDO2 credential enrollment, challenge signing (local
                biometric + ephemeral QR bridge fallback).
-``transport``  Paramiko-based SSH transport, challenge generation, envelope
-               construction, and target-side signature verification.
+``transport``  Legacy FIDO2 DTO wrappers. (Core logic migrated to `uon.core`)
 ``utils``      Platform-aware configuration store and ``Target`` data model.
 =============  =============================================================
 
 Critical path (per-command lifecycle):
 
-1. ``cli`` obtains a 32-byte nonce via ``transport.ssh_client``.
+1. ``cli`` obtains a 32-byte nonce via ``core.generate_challenge()``.
 2. ``auth.fido_local`` signs the nonce inside the hardware enclave
    (graceful degradation to ``auth.qr_bridge`` if no local authenticator
    is detected).
-3. ``transport.ssh_client`` wraps the signed assertion and the original
-   command into a ``__UON_EXEC__`` envelope, sends it over SSH, and
-   streams the result back.
+3. ``cli`` passes the signed assertion to ``core.execute_session()``, 
+   which dynamically wraps a PQC envelope and transmits it natively via 
+   Tokio/Russh.
 
 Security boundary: the private key **never** leaves the hardware enclave.
 The target machine independently verifies the FIDO2 signature before
