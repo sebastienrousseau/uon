@@ -21,7 +21,7 @@ hmac = "0.12.1"
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 ring = "0.17.14"
 uuid = { version = "1.21.0", features = ["v4"] }
-pyo3 = { version = "0.21.2", features = ["extension-module"] }
+pyo3 = { version = "0.24.1", features = ["extension-module"] }
 russh = "0.45.0"
 russh-keys = "0.45.0"
 tokio = { version = "1.37.0", features = ["full", "net"] }
