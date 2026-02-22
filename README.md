@@ -305,170 +305,51 @@ mkdir -p ~/.config/uon
 
 ### Step 2.3 — Copy your public key to the target
 
-From your **controller** (your laptop), copy the public key file:
+From your **controller** (your laptop), copy the public key file to the target:
 
 ```bash
 # Run this on your CONTROLLER (laptop), not on the target
 scp ~/.config/uon/authorized_passkeys.json admin@192.168.1.50:~/.config/uon/
 ```
 
-Replace `admin@192.168.1.50` with the actual username and IP of your
-target.
+*(You should verify the key was copied successfully via `cat ~/.config/uon/authorized_passkeys.json` on the target).*
 
-Verify (on the target):
+### Step 2.4 — Execute the Automated Target Deployment
 
-```bash
-cat ~/.config/uon/authorized_passkeys.json
-```
+Traditionally, locking down a server involved manually injecting Python verifier hooks into `authorized_keys` and surgically hardening `sshd_config`. To massively accelerate **enterprise zero-trust adoption**, `uon` bundles a highly idempotent fleet-deployment script. 
 
-You should see a JSON array containing your key record with
-`credential_id_hex` and `cose_key_hex` fields.  These are **public**
-data — safe to transfer over the network.
-
-### Step 2.4 — Deploy the verifier script on the target
-
-The verifier is a Python script that intercepts every SSH command,
-checks the FIDO2 signature, and only executes the command if the
-signature is valid.
-
-From your **controller**, copy the verifier script to the target:
+Run the automated installer on the **target server** as `root` (or via `sudo`):
 
 ```bash
-# Run this on your CONTROLLER
-scp scripts/uon_verifier.py admin@192.168.1.50:/tmp/uon_verifier.py
+curl -sL https://raw.githubusercontent.com/sebastienrousseau/uon/main/scripts/install_target.sh | sudo bash -s -- <user> 
 ```
 
-Then, on the **target**, move it to a system-wide location:
+*(Replace `<user>` with the username you authenticate to, e.g., `admin` or `pi`).*
 
-```bash
-# Run these on the TARGET
-sudo cp /tmp/uon_verifier.py /usr/local/bin/uon_verifier.py
-sudo chmod +x /usr/local/bin/uon_verifier.py
-```
+**What the install script handles natively:**
+1. **Verifier Scaffolding:** Downloads the `uon_verifier.py` hook securely into `/usr/local/bin/`.
+2. **Payload Enforcement:** Idempotently hooks your `~/.ssh/authorized_keys` to intercept all connections natively via `command="/usr/local/bin/uon_verifier.py"`.
+3. **Daemon Hardening:** Strips legacy access controls inside `/etc/ssh/sshd_config` (disables password authentication, keyboards, and enforces verification).
+4. **Validation/Rollback:** Executes a strict `sshd -t` pre-flight check, immediately restoring target backups if the configuration fails to validate.
 
-Verify:
+> **Warning:** After hardening, traditional password login is permanently disabled.
 
-```bash
-/usr/local/bin/uon_verifier.py
-# Expected (on stderr): "UON Verifier Error: Missing or invalid UON envelope."
-# This is correct — it means the verifier is installed and running, but
-# no signed envelope was provided (because you ran it manually).
-```
+### Step 2.5 — Verify access before disconnecting
 
-### Step 2.5 — Link the verifier to your SSH key
-
-This is the critical step that tells OpenSSH to route every incoming
-command through the verifier.
-
-On the **target**, edit (or create) the `~/.ssh/authorized_keys` file.
-Find the line containing your existing SSH public key — it looks
-something like:
-
-```
-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample... user@laptop
-```
-
-**Prepend** the following restriction prefix to that line, so the
-complete line becomes:
-
-```
-command="/usr/local/bin/uon_verifier.py",no-port-forwarding,no-X11-forwarding,no-agent-forwarding ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample... user@laptop
-```
-
-**What each restriction does:**
-
-| Restriction                | Effect                                                                     |
-|----------------------------|----------------------------------------------------------------------------|
-| `command="…/uon_verifier.py"` | Every SSH session runs the verifier instead of a shell.  The original command is passed via `$SSH_ORIGINAL_COMMAND`. |
-| `no-port-forwarding`       | Prevents SSH tunnels — the key can only run commands, not forward ports.   |
-| `no-X11-forwarding`        | Prevents X11 display forwarding.                                           |
-| `no-agent-forwarding`      | Prevents SSH agent forwarding — your laptop's keys are not exposed.        |
-
-**How to edit the file:**
-
-```bash
-# On the TARGET
-nano ~/.ssh/authorized_keys
-# (or use vim, vi, or any editor you prefer)
-```
-
-Add the `command="...",...` prefix before `ssh-ed25519` (or `ssh-rsa`),
-all on one line.  Save and exit.
-
-> **Do not close your current SSH session yet.**  You will verify access
-> in Step 2.7 before disconnecting.
-
-### Step 2.6 — Harden the target's SSH configuration
-
-This step disables password login and other legacy authentication
-methods, so the only way to access the machine is through a
-FIDO2-signed uon command.
-
-From your **controller**, copy the hardening script:
-
-```bash
-# Run this on your CONTROLLER
-scp scripts/harden_target.sh admin@192.168.1.50:/tmp/harden_target.sh
-```
-
-On the **target**, run it as root:
-
-```bash
-# Run this on the TARGET
-sudo bash /tmp/harden_target.sh
-```
-
-The script:
-
-1. **Backs up** your current `/etc/ssh/sshd_config` (so you can undo if
-   needed).
-2. **Disables** password authentication, keyboard-interactive auth, and
-   empty passwords.
-3. **Enables** public-key authentication with physical-presence
-   verification (`PubkeyAuthOptions verify-required`).
-4. **Restricts** SSH to your local subnet (default `192.168.0.0/16`).
-   Pass a custom subnet as an argument:
-   `sudo bash /tmp/harden_target.sh 10.0.0.0/24`
-5. **Validates** the configuration with `sshd -t`.  If invalid, it
-   automatically restores the backup.
-6. **Restarts** the SSH daemon.
-
-The script is idempotent — you can safely re-run it.
-
-> **Warning:** After hardening, password login is permanently disabled.
-> If you have not set up uon correctly, you may lose access.  Always
-> verify access (Step 2.7) from a **second terminal** before closing
-> your current session.
-
-### Step 2.7 — Verify access before disconnecting
-
-Open a **new terminal window** on your controller (keep the old SSH
-session open as a safety net) and try:
+Open a **new terminal window** on your controller (keep the old SSH session open as a safety net) and try:
 
 ```bash
 uon home-server "whoami"
 ```
 
-You should see:
+You should see a biometric prompt (Touch ID / Hello / key tap), followed by your output user. If this works, your setup is completely finished.
 
-1. A biometric prompt (Touch ID / Hello / key tap).
-2. After approval, the output: `admin` (or whatever user you configured).
-
-If this works, your setup is complete.  You can safely close the old SSH
-session.
-
-**If it fails:** Go back to the open SSH session on the target and check:
-
-- Does `/usr/local/bin/uon_verifier.py` exist and is it executable?
-- Does `~/.config/uon/authorized_passkeys.json` exist and contain your key?
-- Is `~/.ssh/authorized_keys` formatted correctly (all on one line)?
-
-To undo hardening and restore password access:
+To manually undo hardening and restore password access (if you locked yourself out from your active session):
 
 ```bash
 # On the target, in your still-open session
 sudo cp /etc/ssh/sshd_config.uon-backup.* /etc/ssh/sshd_config
-sudo systemctl restart sshd   # or: sudo service sshd restart
+sudo systemctl restart sshd
 ```
 
 ---
