@@ -105,25 +105,21 @@ def verify_and_execute() -> None:
         )
         sys.exit(1)
 
-    # 5. Execution — Zero Standing Privilege (ZSP) Dynamic Profiling
-    # Instead of executing as the logged-in user with static privileges,
-    # generate a Just-In-Time ephemeral group for this payload's execution lifecycle.
-    import uuid
-    jit_group = f"uon-exec-{uuid.uuid4().hex[:8]}"
+    # 5. Execution — Zero Standing Privilege (ZSP) Dynamic Profiling Natively in Rust
+    # Instead of exposing process spawning vulnerabilities via Python's subprocess,
+    # we dispatch the workload to the core C-extension runtime.
+    # The Rust runtime orchestrates the Just-In-Time ephemeral group allocation,
+    # command execution, process tracking, OS-conditional kernel bounds (eBPF/EndpointSecurity)
+    # and teardown without Python GIL contention.
+    from uon import core  # type: ignore[import-untyped]
     
     try:
-        # Create ephemeral JIT group
-        subprocess.run(["sudo", "groupadd", jit_group], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  # noqa: S603,S607
-        
-        # Execute the inner command under the context of the JIT group
-        # This isolates the process permission subset from the broader SSH login session.
-        subprocess.run(["sudo", "-g", jit_group, "sh", "-c", command], check=True)  # noqa: S603,S607
-        
-    except subprocess.CalledProcessError as e:
-        sys.exit(e.returncode)
-    finally:
-        # Guarantee teardown of the ephemeral ZSP profile
-        subprocess.run(["sudo", "groupdel", jit_group], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  # noqa: S603,S607
+        # spawn_zsp_process performs: GroupAdd -> Spawn Sudo -> apply_ebpf_sandbox -> Wait -> GroupDel
+        exit_code = core.spawn_zsp_process(command)
+        sys.exit(exit_code)
+    except Exception as e:
+        print(f"UON Verifier Error: ZSP Extractor exception - {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -55,9 +55,28 @@ class TestSSFReceiver:
         assert response.json()["status"] == "ignored"
         mock_run.assert_not_called()
 
-    def test_invalid_payload(self, client: TestClient) -> None:
-        response = client.post("/ssf/events", json={"invalid": "payload"})
+    def test_invalid_json_bytes(self, client: TestClient) -> None:
+        response = client.post("/ssf/events", content=b"{not-json!!!")
         assert response.status_code == 400
+
+    @patch("uon.auth.ssf_receiver.core.parse_ssf_event")
+    def test_explicit_value_error(self, mock_parse: MagicMock, client: TestClient) -> None:
+        mock_parse.side_effect = ValueError("Simulated Bad JSON")
+        response = client.post("/ssf/events", content=b"{}")
+        assert response.status_code == 400
+        
+    @patch("uon.auth.ssf_receiver.core.parse_ssf_event")
+    def test_explicit_internal_error(self, mock_parse: MagicMock, client: TestClient) -> None:
+        mock_parse.side_effect = Exception("Simulated Core Panic")
+        response = client.post("/ssf/events", content=b"{}")
+        assert response.status_code == 500
+
+    def test_spam_payload_graceful_drop(self, client: TestClient) -> None:
+        # Valid JSON, but not a valid SSF SET (missing core claims).
+        # Rust parser securely drops this without waking Python exceptions.
+        response = client.post("/ssf/events", json={"invalid": "payload"})
+        assert response.status_code == 200
+        assert response.json()["status"] == "ignored"
 
     @patch("uon.auth.ssf_receiver.subprocess.run")
     def test_kill_sessions_exception(self, mock_run: MagicMock, client: TestClient) -> None:

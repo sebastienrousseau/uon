@@ -8,14 +8,11 @@ before the SSH transport and FIDO2 assertions proceed.
 
 from __future__ import annotations
 
-import hashlib
-import hmac
-import time
-from typing import Optional
+from uon import core  # type: ignore[import-untyped,import-not-found]
 
 
 def compute_amdns_hmac(ble_secret: bytes, target_alias: str, timestamp: int) -> str:
-    """Compute the expected Authenticated mDNS HMAC for a discovery beacon.
+    """Compute the expected Authenticated mDNS HMAC for a discovery beacon natively via Rust.
 
     Args:
         ble_secret:   32-byte shared secret negotiated via BLE proximity.
@@ -26,15 +23,13 @@ def compute_amdns_hmac(ble_secret: bytes, target_alias: str, timestamp: int) -> 
         A hex-encoded HMAC string representing the current cryptographic
         expectation for the network target.
     """
-    message = f"{target_alias}:{timestamp}".encode("utf-8")
-    mac = hmac.new(ble_secret, message, hashlib.sha256)
-    return mac.hexdigest()
+    return core.compute_amdns_hmac(ble_secret, target_alias, timestamp)  # type: ignore[no-any-return,unused-ignore]
 
 
 def verify_discovery_beacon(
     ble_secret: bytes, target_alias: str, reported_hmac: str, time_tolerance_seconds: int = 30
 ) -> bool:
-    """Validate an intercepted AmDNS beacon to prevent Man-in-the-Middle spoofing.
+    """Validate an intercepted AmDNS beacon via the high-throughput Rust parser natively evaluating clock drifts.
 
     Args:
         ble_secret:   The 32-byte secret negotiated via the active BLE connection.
@@ -46,15 +41,6 @@ def verify_discovery_beacon(
         ``True`` if the beacon mathematically proves ownership of the BLE
         secret; ``False`` otherwise.
     """
-    current_time = int(time.time())
-    
-    # Check current interval and previous interval to account for slight clock drift
-    for offset in (0, -time_tolerance_seconds, time_tolerance_seconds):
-        window = (current_time + offset) // time_tolerance_seconds
-        expected = compute_amdns_hmac(ble_secret, target_alias, window)
-        
-        # Constant-time comparison to prevent timing attacks
-        if hmac.compare_digest(expected, reported_hmac):
-            return True
-            
-    return False
+    return core.verify_discovery_beacon(  # type: ignore[no-any-return,unused-ignore]
+        ble_secret, target_alias, reported_hmac, time_tolerance_seconds
+    )

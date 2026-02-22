@@ -43,25 +43,26 @@ def kill_uon_sessions(subject_identifier: str) -> None:
     except Exception as e:
         logging.error(f"Failed to terminate uon sessions: {e}")
 
+from uon import core  # type: ignore[import-untyped,import-not-found]
+
 @app.post("/ssf/events")
 async def receive_ssf_event(request: Request) -> dict[str, str]:
-    """Ingest a Security Event Token from the IdP stream."""
+    """Ingest a Security Event Token from the IdP stream natively parsed in Rust."""
     try:
-        payload = await request.json()
-        token = SSFToken(**payload)
+        body_bytes = await request.body()
+        payload = body_bytes.decode("utf-8")
         
-        # Parse the OpenID events
-        events = token.events
-        if RISC_ACCOUNT_DISABLED in events or RISC_CREDENTIAL_CHANGE in events:
-            # We assume the subject claims tell us who was disabled
-            event_data = events.get(RISC_ACCOUNT_DISABLED) or events.get(RISC_CREDENTIAL_CHANGE, {})
-            subject: dict[str, str] = event_data.get("subject", {})
-            
-            identifier = subject.get("sub") or subject.get("email") or "unknown"
+        # Rust core handles parsing and extraction instantly without Pydantic overhead
+        identifier = core.parse_ssf_event(payload)  # type: ignore[attr-defined]
+        
+        if identifier is not None:
             kill_uon_sessions(identifier)
             return {"status": "accepted"}
             
         return {"status": "ignored", "reason": "event_type_not_actionable"}
-    except Exception as e:
+    except ValueError as e:
         logging.error(f"Invalid SSF payload: {e}")
         raise HTTPException(status_code=400, detail="Invalid SET payload")
+    except Exception as e:
+        logging.error(f"SSF processing error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")

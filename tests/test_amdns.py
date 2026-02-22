@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import time
-from unittest.mock import patch
 
 from uon.transport.amdns import compute_amdns_hmac, verify_discovery_beacon
 
@@ -16,33 +15,27 @@ class TestAmDNS:
         
         mac = compute_amdns_hmac(ble_secret, alias, timestamp)
         assert len(mac) == 64  # SHA-256 hex digest length
-        
-        # Reproducible determinism
         assert mac == compute_amdns_hmac(ble_secret, alias, timestamp)
 
-    @patch("uon.transport.amdns.time.time")
-    def test_verify_beacon_valid(self, mock_time) -> None:
-        mock_time.return_value = 3000.0  # Window = 3000 // 30 = 100
+    def test_verify_beacon_valid(self) -> None:
         ble_secret = b"12345678901234567890123456789012"
         alias = "prod-node"
         
-        # Valid window
-        expected_hmac = compute_amdns_hmac(ble_secret, alias, 100)
+        # Valid window dynamically matching the current rust evaluation
+        current_window = int(time.time()) // 30
+        expected_hmac = compute_amdns_hmac(ble_secret, alias, current_window)
         assert verify_discovery_beacon(ble_secret, alias, expected_hmac) is True
 
-    @patch("uon.transport.amdns.time.time")
-    def test_verify_beacon_drift(self, mock_time) -> None:
-        mock_time.return_value = 3005.0  # Current window is 100
+    def test_verify_beacon_drift(self) -> None:
         ble_secret = b"secret_key_32_bytes_long_exactly"
         alias = "dev-db"
         
-        # Simulate beacon computed from the previous window (99) due to clock drift
-        old_hmac = compute_amdns_hmac(ble_secret, alias, 99)
+        # Simulate beacon computed from the previous window due to clock drift
+        previous_window = (int(time.time()) - 30) // 30
+        old_hmac = compute_amdns_hmac(ble_secret, alias, previous_window)
         assert verify_discovery_beacon(ble_secret, alias, old_hmac) is True
 
-    @patch("uon.transport.amdns.time.time")
-    def test_verify_beacon_invalid(self, mock_time) -> None:
-        mock_time.return_value = 5000.0
+    def test_verify_beacon_invalid(self) -> None:
         ble_secret = b"12345678901234567890123456789012"
         alias = "staging"
         
@@ -50,5 +43,5 @@ class TestAmDNS:
         assert verify_discovery_beacon(ble_secret, alias, "deadbeef" * 8) is False
         
         # Wrong alias
-        wrong_hmac = compute_amdns_hmac(ble_secret, "wrong-alias", 5000 // 30)
-        assert verify_discovery_beacon(ble_secret, alias, wrong_hmac) is False
+        wrong_window_hmac = compute_amdns_hmac(ble_secret, "wrong-alias", int(time.time()) // 30)
+        assert verify_discovery_beacon(ble_secret, alias, wrong_window_hmac) is False

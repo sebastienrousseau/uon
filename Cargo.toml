@@ -6,7 +6,7 @@ edition = "2021"
 [lib]
 name = "uon_core"
 crate-type = ["cdylib"]
-path = "rust_core/lib.rs"
+path = "src/uon_core/lib.rs"
 
 [dependencies]
 pyo3 = { version = "0.21.2", features = ["extension-module"] }
@@ -21,3 +21,8 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 futures = "0.3"
 async-trait = "0.1"
+hmac = "0.12.1"
+sha2 = "0.10.9"
+ring = "0.17.14"
+hex = "0.4.3"
+uuid = { version = "1.21.0", features = ["v4"] }

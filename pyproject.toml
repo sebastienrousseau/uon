@@ -57,3 +57,23 @@ strict = true
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+
+[tool.importlinter]
+root_package = "uon"
+
+[[tool.importlinter.contracts]]
+name = "Modular Monolith Layering"
+type = "layers"
+layers = [
+    "uon.cli",
+    "uon.auth | uon.transport",
+    "uon.utils",
+]
+
+[[tool.importlinter.contracts]]
+name = "Domain Independence"
+type = "independence"
+modules = [
+    "uon.auth",
+    "uon.transport",
+]
