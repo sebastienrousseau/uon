@@ -214,6 +214,7 @@ nav {
   font-size: clamp(2rem, 5vw, 4.5rem);
   font-weight: 800;
   line-height: 1.05;
+  color: var(--brand-color);
   margin-top: 0;
   margin-bottom: 1.5rem;
   letter-spacing: -0.04em;
