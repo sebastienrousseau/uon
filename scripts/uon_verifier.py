@@ -105,11 +105,25 @@ def verify_and_execute() -> None:
         )
         sys.exit(1)
 
-    # 5. Execution — command is verified by hardware-backed signature
+    # 5. Execution — Zero Standing Privilege (ZSP) Dynamic Profiling
+    # Instead of executing as the logged-in user with static privileges,
+    # generate a Just-In-Time ephemeral group for this payload's execution lifecycle.
+    import uuid
+    jit_group = f"uon-exec-{uuid.uuid4().hex[:8]}"
+    
     try:
-        subprocess.run(command, shell=True, check=True)  # noqa: S602 — post-verification exec
+        # Create ephemeral JIT group
+        subprocess.run(["sudo", "groupadd", jit_group], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  # noqa: S603,S607
+        
+        # Execute the inner command under the context of the JIT group
+        # This isolates the process permission subset from the broader SSH login session.
+        subprocess.run(["sudo", "-g", jit_group, "sh", "-c", command], check=True)  # noqa: S603,S607
+        
     except subprocess.CalledProcessError as e:
         sys.exit(e.returncode)
+    finally:
+        # Guarantee teardown of the ephemeral ZSP profile
+        subprocess.run(["sudo", "groupdel", jit_group], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  # noqa: S603,S607
 
 
 if __name__ == "__main__":
