@@ -105,8 +105,10 @@ class TestCheckCredential:
     def test_open_policy_allows_everything(self, policy_store: PolicyStore) -> None:
         assert policy_store.check_credential("2fc0579f-8113-47ea-b116-bb5a8db9202a", False) is None
 
-    def test_open_policy_allows_backup_eligible(self, policy_store: PolicyStore) -> None:
-        assert policy_store.check_credential("2fc0579f-8113-47ea-b116-bb5a8db9202a", True) is None
+    def test_open_policy_rejects_backup_eligible(self, policy_store: PolicyStore) -> None:
+        result = policy_store.check_credential("2fc0579f-8113-47ea-b116-bb5a8db9202a", True)
+        assert result is not None
+        assert "Enterprise Attestation violation" in result
 
     def test_enforcing_allows_listed(self, policy_store: PolicyStore) -> None:
         policy_store.add("2fc0579f-8113-47ea-b116-bb5a8db9202a")
