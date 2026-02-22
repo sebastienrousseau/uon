@@ -1,3 +1,8 @@
+# Copyright (c) 2026 Sebastien Rousseau
+# 
+# Licensed under the MIT License. See LICENSE file in the project root
+# for full license information.
+
 """Shared Signals Framework (SSF) Receiver.
 
 Monitors an external Identity Provider (IdP) for OpenID Security Event Tokens

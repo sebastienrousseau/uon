@@ -1,3 +1,8 @@
+# Copyright (c) 2026 Sebastien Rousseau
+# 
+# Licensed under the MIT License. See LICENSE file in the project root
+# for full license information.
+
 """Tests for src.auth.qr_bridge — QR-code FIDO2 fallback bridge."""
 
 from __future__ import annotations

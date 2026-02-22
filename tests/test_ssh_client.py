@@ -1,3 +1,8 @@
+# Copyright (c) 2026 Sebastien Rousseau
+# 
+# Licensed under the MIT License. See LICENSE file in the project root
+# for full license information.
+
 """Tests for src.transport.ssh_client — challenge generation, envelope, SSH exec."""
 
 from __future__ import annotations

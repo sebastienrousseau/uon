@@ -1,3 +1,8 @@
+# Copyright (c) 2026 Sebastien Rousseau
+# 
+# Licensed under the MIT License. See LICENSE file in the project root
+# for full license information.
+
 """Post-Quantum Cryptography (PQC) integration for uon transport.
 
 Wraps classical ECDH and Ed25519 signatures with ML-KEM (Kyber) and

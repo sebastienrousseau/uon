@@ -1,3 +1,8 @@
+# Copyright (c) 2026 Sebastien Rousseau
+# 
+# Licensed under the MIT License. See LICENSE file in the project root
+# for full license information.
+
 """eBPF kernel-level execution monitoring.
 
 This module provides an eBPF-based enforcement layer that restricts the

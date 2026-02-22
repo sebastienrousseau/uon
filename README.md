@@ -842,3 +842,7 @@ poetry run pre-commit run --all-files
 ## License
 
 MIT
+
+---
+Designed by Sebastien Rousseau — https://sebastienrousseau.com
+Engineered with Euxis — Enterprise Unified Execution Intelligence System — https://euxis.co

@@ -1,3 +1,8 @@
+# Copyright (c) 2026 Sebastien Rousseau
+# 
+# Licensed under the MIT License. See LICENSE file in the project root
+# for full license information.
+
 """Authenticated mDNS (AmDNS) for secure local network discovery.
 
 Standard mDNS broadcasts are trivially spoofable. This module implements

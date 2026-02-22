@@ -1,3 +1,8 @@
+# Copyright (c) 2026 Sebastien Rousseau
+# 
+# Licensed under the MIT License. See LICENSE file in the project root
+# for full license information.
+
 """Tests for src.cli — Click CLI group, subcommands, core execution."""
 
 from __future__ import annotations

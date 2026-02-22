@@ -9,6 +9,10 @@ description = "Ultra-secure, biometric-signed remote terminal execution for macO
 authors = [{name = "Sebastien Rousseau", email = "sebastian.rousseau@gmail.com"}]
 readme = "README.md"
 requires-python = ">=3.12"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+]
 dependencies = [
     "click>=8.1",
     "fido2>=1.1,<3",
