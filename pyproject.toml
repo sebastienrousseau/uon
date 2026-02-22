@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "uon"
-version = "0.1.0"
+version = "0.0.1"
 description = "Ultra-secure, biometric-signed remote terminal execution for macOS, Linux, and WSL."
 authors = ["Sebastien Rousseau <sebastian.rousseau@gmail.com>"]
 readme = "README.md"
