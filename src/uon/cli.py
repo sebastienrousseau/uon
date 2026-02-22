@@ -56,7 +56,7 @@ from uon.auth.fido_local import (
 )
 from uon.auth.qr_bridge import request_signature_via_qr
 from uon.contracts.fido_dto import FidoAssertionDto
-from uon.transport.ssh_client import ExecResult, execute_signed, request_challenge
+from uon import core  # type: ignore[import-untyped,import-not-found]
 from uon.utils.config import Credential, Target, TargetStore
 from uon.utils.policy import PolicyStore, is_valid_aaguid
 
@@ -308,24 +308,31 @@ def _run_command(target_alias: str, command: str) -> None:
 
     # Step 1: Obtain challenge
     click.echo(f"Connecting to {target.user}@{target.host}:{target.port} …", err=True)
-    challenge = request_challenge(target.host, target.port, target.user)
+    nonce, session_id = core.generate_challenge()
 
     # Step 2: Sign challenge — try local biometric first, fall back to QR
-    assertion = _resolve_signature(challenge.nonce, credential_ids_raw)
+    assertion = _resolve_signature(nonce, credential_ids_raw)
 
-    # Step 3: Execute
+    # Step 3: Execute via monolithic Rust boundary
     click.echo("Executing command …", err=True)
-    result = execute_signed(
-        host=target.host,
-        port=target.port,
-        username=target.user,
-        command=command,
-        assertion=assertion,
-        challenge=challenge,
-    )
+    try:
+        exit_code, stdout, stderr = core.execute_session(
+            host=target.host,
+            port=target.port,
+            username=target.user,
+            command=command,
+            session_id=session_id,
+            credential_id=assertion.credential_id,
+            client_data=assertion.client_data,
+            auth_data=assertion.auth_data,
+            signature=assertion.signature,
+        )
+    except Exception as e:
+        click.echo(f"SSH execution failed: {e}", err=True)
+        raise SystemExit(1) from e
 
-    _print_result(result)
-    raise SystemExit(result.exit_code)
+    _print_result(stdout, stderr)
+    raise SystemExit(exit_code)
 
 
 def _resolve_signature(
@@ -406,7 +413,7 @@ def _resolve_signature(
         raise SystemExit(1) from exc
 
 
-def _print_result(result: ExecResult) -> None:
+def _print_result(stdout: str, stderr: str) -> None:
     """Write the remote command's output to the corresponding local streams.
 
     Stdout and stderr are forwarded independently so that downstream
@@ -416,16 +423,16 @@ def _print_result(result: ExecResult) -> None:
     terminal output.
 
     Args:
-        result: Immutable ``ExecResult`` snapshot returned by
-            ``execute_signed()``.
+        stdout: Decoded standard output
+        stderr: Decoded standard error
     """
-    if result.stdout:
-        sys.stdout.write(result.stdout)
-        if not result.stdout.endswith("\n"):
+    if stdout:
+        sys.stdout.write(stdout)
+        if not stdout.endswith("\n"):
             sys.stdout.write("\n")
-    if result.stderr:
-        sys.stderr.write(result.stderr)
-        if not result.stderr.endswith("\n"):
+    if stderr:
+        sys.stderr.write(stderr)
+        if not stderr.endswith("\n"):
             sys.stderr.write("\n")
 
 
