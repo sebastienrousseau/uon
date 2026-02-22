@@ -116,18 +116,18 @@ class TestWrapCommand:
     @patch("uon.transport.pqc.os.urandom")
     def test_decodable_payload(self, mock_urandom: MagicMock) -> None:
         from uon.transport.pqc import PQCHybridWrapper
-        
+
         # Ensure the random KEM seed and nonce are identical for both wrapper instances
         mock_urandom.side_effect = lambda n: b"\x00" * n
-        
+
         envelope = {"command": "uptime", "version": 1}
         wrapped = _wrap_command(envelope)
         b64_part = wrapped.split(" ", 1)[1]
-        
+
         pqc = PQCHybridWrapper()
         decoded_string = pqc.decapsulate_envelope(b64_part)
         decoded = json.loads(decoded_string)
-        
+
         assert decoded["command"] == "uptime"
 
 

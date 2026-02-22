@@ -1,51 +1,50 @@
 # uon — FIDO2-Signed Remote Terminal Execution
 
-**uon** replaces password- and key-file-based SSH authentication with
-hardware-bound FIDO2 passkeys.  Every remote command is cryptographically
-signed by your device's Secure Enclave (Touch ID, Windows Hello, or a USB
-security key) before the target machine will execute it.  No private key
-material ever touches disk.
+**uon** replaces password- and key-file-based SSH authentication with hardware-bound FIDO2 passkeys, guaranteeing Zero-Trust execution bounds. Every remote command is cryptographically signed by your device's Secure Enclave (Touch ID, Windows Hello, or a USB security key) before the target machine will execute it. No private key material ever touches disk.
+
+---
+
+## Architecture & Mental Model
+
+### The Intent
+Traditional SSH lets anyone with a private key file run commands. If that file is stolen, the attacker asserts full access over your infrastructure. uon eliminates the static file entirely — your private key lives securely inside tamper-resistant hardware and can never be exported.
+
+### The Mental Model
+Think of `uon` as a cryptographic courier. Instead of unlocking a permanent shell, `uon` packages your literal command (e.g., `uptime`) into a Zero-Trust envelope, forces you to physically prove your presence via a hardware signature, and then transmits that verified envelope across the wire. 
+
+### Platform Constraints
+* **macOS**: Leverages Apple Secure Enclave & Touch ID natively.
+* **Windows**: Hooks into Windows Hello cryptography.
+* **Linux/WSL**: Negotiates physical USB security keys (YubiKey/SoloKey) directly.
 
 ---
 
 ## Table of Contents
 
-1. [How It Works](#how-it-works)
+1. [Architecture & Mental Model](#architecture--mental-model)
 2. [What You Need Before You Start](#what-you-need-before-you-start)
 3. [Terminology](#terminology)
-4. [Phase 1 — Set Up Your Controller (Your Laptop)](#phase-1--set-up-your-controller-your-laptop)
-5. [Phase 2 — Set Up Each Target (Remote Server)](#phase-2--set-up-each-target-remote-server)
+4. [Phase 1 — Set Up Your Controller](#phase-1--set-up-your-controller)
+5. [Phase 2 — Set Up Each Target](#phase-2--set-up-each-target)
 6. [Phase 3 — Test the Full Loop](#phase-3--test-the-full-loop)
 7. [CLI Reference](#cli-reference)
-8. [Architecture](#architecture)
-9. [Security Model](#security-model)
-10. [Troubleshooting](#troubleshooting)
-11. [Development](#development)
-12. [License](#license)
+8. [Security Model](#security-model)
+9. [Troubleshooting](#troubleshooting)
+10. [License](#license)
 
 ---
 
-## How It Works
+### The Execution Lifecycle
 
-Traditional SSH lets anyone with a private key file run commands.  If that
-file is stolen, the attacker has full access.  uon eliminates the file
-entirely — your private key lives inside tamper-resistant hardware
-(your laptop's Secure Enclave or a physical USB key) and can never be
-exported.
+Every time you run a command, `uon` enforces the following zero-trust flow:
 
-Every time you run a command, the flow is:
+1. **Local Invocation**: You cast `uon my-server "uptime"` on your laptop (the **controller**).
+2. **Hardware Signature**: `uon` drops into native bounds, asking your hardware to **sign** a one-time cryptographic challenge. You confirm with Touch ID, Windows Hello, or a YubiKey tap.
+3. **Transport**: The signed command travels over SSH to the **target** server.
+4. **Verifiable Telemetry**: The target's OpenSSH `ForceCommand` intercepts the payload. A specialized verifier mathematically confirms the signature originated from your physical hardware.
+5. **Execution & Teardown**: Upon validation, the kernel spins up an ephemeral execution group, executes your command, and streams the output directly back to your terminal.
 
-1. You type `uon my-server "uptime"` on your laptop (the **controller**).
-2. uon asks your hardware to **sign** a one-time challenge — you confirm
-   with Touch ID, Windows Hello, or a tap on your YubiKey.
-3. The signed command travels over SSH to the **target** server.
-4. The target's verifier script mathematically confirms the signature
-   came from your physical hardware before executing anything.
-5. The command output streams back to your terminal.
-
-If your laptop lid is closed or you have no USB key plugged in, uon
-automatically displays a **QR code** in your terminal.  You scan it with
-your phone, sign the challenge there, and the command proceeds.
+> **QR Fallback**: If your laptop lid is closed or you lack USB keys, `uon` automatically displays a **QR code** in your terminal. You scan it with your phone, sign the challenge securely, and the command proceeds.
 
 ---
 
@@ -537,24 +536,32 @@ self-destructs after one use or after 120 seconds.
 
 ### `uon <target> "<command>"`
 
-Execute a signed command on a registered target.
+Executes a signed command remotely on a registered target.
+
+#### # Examples
 
 ```bash
 uon my-server "uptime"
 uon my-server "cat /etc/hostname"
 ```
 
-**Exit code:** Matches the remote command's exit code (0 = success).
+#### # Errors
+* Returns standard exit code `> 0` natively aligning with the remote command's executed failure state.
+* Panics locally if the security envelope exceeds the hardware memory threshold or fails base64 transit.
 
 ### `uon add <alias> <host> [--port PORT] [--user USER]`
 
-Register a new target machine.  The target is stored locally in your
-config file.  If a target with the same alias exists, it is overwritten.
+Registers a new target machine definition persistently into the local Zero-Trust config store.
+
+#### # Examples
 
 ```bash
 uon add prod 10.0.0.5 --port 2222 --user deploy
 uon add pi 192.168.1.42 --user pi
 ```
+
+#### # Errors
+* Overwrites silently if a target with the same `<alias>` already exists in the store.
 
 | Option    | Default | Description                          |
 |-----------|---------|--------------------------------------|
@@ -563,7 +570,9 @@ uon add pi 192.168.1.42 --user pi
 
 ### `uon list`
 
-Show all registered targets and their enrolled credential counts.
+Enumerates all registered targets and their enrolled credential counts iteratively.
+
+#### # Examples
 
 ```bash
 $ uon list
@@ -573,12 +582,16 @@ $ uon list
 
 ### `uon register <alias> [--user-name NAME]`
 
-Enroll a FIDO2 passkey for a target.  Triggers a biometric or
-physical-touch prompt.  The target must already exist (via `uon add`).
+Enrolls a FIDO2 passkey for a specific target by triggering a biometric or physical-touch prompt natively at the hardware level.
+
+#### # Examples
 
 ```bash
 uon register prod
 ```
+
+#### # Errors
+* Panics returning `PyRuntimeError` if the specified `<alias>` target does not already exist.
 
 | Option         | Default                        | Description                           |
 |----------------|--------------------------------|---------------------------------------|
@@ -586,11 +599,16 @@ uon register prod
 
 ### `uon remove <alias>`
 
-Un-register a target.  Exits with code 1 if the alias does not exist.
+Un-registers a target securely from the state store.
+
+#### # Examples
 
 ```bash
 uon remove prod
 ```
+
+#### # Errors
+* Exits immediately with code `1` if the provided alias cannot be resolved.
 
 ---
 
@@ -841,7 +859,7 @@ poetry run pre-commit run --all-files
 
 ## License
 
-MIT
+[GNU Affero General Public License v3.0 (AGPLv3)](LICENSE)
 
 ---
 Designed by Sebastien Rousseau — https://sebastienrousseau.com

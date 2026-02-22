@@ -274,7 +274,7 @@ def _wrap_command(envelope: dict[str, Any]) -> str:
     payload_json = json.dumps(envelope, separators=(",", ":"))
     pqc = PQCHybridWrapper()
     crypto_payload = pqc.encapsulate_envelope(payload_json)
-    
+
     return f"__UON_EXEC__ {crypto_payload}"
 
 
