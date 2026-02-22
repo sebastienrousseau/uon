@@ -15,12 +15,13 @@
   /* Light Theme */
   --bg-color: #FFFFFF;
   --text-main: #0D0D11;
-  --text-muted: #6B6B75;
-  --brand-color: #9AAB00;
-  /* Darker lime for AAA light bg */
+  --text-muted: #4A4A52;
+  /* AAA contrast on white */
+  --brand-color: #4D5600;
+  /* AAA contrast on white */
   --card-bg: #F5F5F7;
   --glass-border: rgba(0, 0, 0, 0.04);
-  --blob-glow: rgba(154, 171, 0, 0.15);
+  --blob-glow: rgba(77, 86, 0, 0.15);
   --btn-text: #FFFFFF;
 }
 
@@ -28,7 +29,8 @@
   :root {
     --bg-color: var(--color-deep-charcoal);
     --text-main: #FFFFFF;
-    --text-muted: #8F8F9B;
+    --text-muted: #A0A0AB;
+    /* AAA contrast on charcoal */
     --brand-color: var(--color-cyber-lime);
     --card-bg: rgba(255, 255, 255, 0.02);
     --glass-border: rgba(255, 255, 255, 0.04);
@@ -197,12 +199,30 @@ nav {
   align-items: center;
 }
 
-.hero h1 {
-  font-size: clamp(3.5rem, 8vw, 7.5rem);
+.hero h1.hero-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  font-size: clamp(4rem, 10vw, 8rem);
   font-weight: 900;
-  line-height: 1.05;
+  line-height: 1;
+  margin-top: 0;
   margin-bottom: 2rem;
   letter-spacing: -0.05em;
+}
+
+.hero h1.hero-logo span {
+  color: var(--brand-color);
+}
+
+.hero h2 {
+  font-size: clamp(2rem, 5vw, 4.5rem);
+  font-weight: 800;
+  line-height: 1.05;
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  letter-spacing: -0.04em;
   max-width: 1000px;
 }
 
