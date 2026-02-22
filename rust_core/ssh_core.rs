@@ -34,9 +34,25 @@ pub fn execute_signed_rust(
         let config = russh::client::Config::default();
         let config = Arc::new(config);
 
-        let mut session = match russh::client::connect(config, (host.as_str(), port), ClientHandler).await {
-            Ok(s) => s,
-            Err(e) => return Err(PyRuntimeError::new_err(format!("SSH connect error: {}", e))),
+        let mut session = if host.starts_with("unix:") {
+            #[cfg(unix)]
+            {
+                let path = host.strip_prefix("unix:").unwrap_or(&host);
+                let stream = tokio::net::UnixStream::connect(path)
+                    .await
+                    .map_err(|e| PyRuntimeError::new_err(format!("UnixStream connect error: {}", e)))?;
+                russh::client::connect_stream(config, stream, ClientHandler)
+                    .await
+                    .map_err(|e| PyRuntimeError::new_err(format!("SSH stream error: {}", e)))?
+            }
+            #[cfg(not(unix))]
+            {
+                return Err(PyRuntimeError::new_err("Unix sockets not supported on this platform".to_string()));
+            }
+        } else {
+            russh::client::connect(config, (host.as_str(), port), ClientHandler)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("SSH connect error: {}", e)))?
         };
 
         // Note: Real implementations will orchestrate `russh-keys` to negotiate agent keys.
