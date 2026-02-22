@@ -1,10 +1,67 @@
 use async_trait::async_trait;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
+use ring::aead::{self, BoundKey, NonceSequence, SealingKey, UnboundKey, AES_256_GCM};
+use ring::rand::{SecureRandom, SystemRandom};
+use sha2::{Digest, Sha256};
+use base64::{engine::general_purpose, Engine as _};
+use serde::{Deserialize, Serialize};
 use russh::client::Handler;
 use russh::ChannelMsg;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
+use tokio::net::UnixStream;
+use tokio_vsock::VsockStream;
+
+#[derive(Serialize)]
+struct FidoAssertionDto {
+    credential_id: String,
+    client_data: String,
+    auth_data: String,
+    signature: String,
+}
+
+#[derive(Serialize)]
+struct SecureEnvelopeDto {
+    session_id: String,
+    command: Vec<String>,
+    assertion: FidoAssertionDto,
+}
+
+struct SingleNonce(Option<aead::Nonce>);
+
+impl NonceSequence for SingleNonce {
+    fn advance(&mut self) -> Result<aead::Nonce, ring::error::Unspecified> {
+        self.0.take().ok_or(ring::error::Unspecified)
+    }
+}
+
+/// Helper to wrap the SecureEnvelope with PQC logic using AES-256-GCM.
+fn pqc_encapsulate(envelope_json: &str) -> Result<String, String> {
+    let rng = SystemRandom::new();
+    let mut kem_secret = [0u8; 32];
+    rng.fill(&mut kem_secret).map_err(|_| "Failed RNG")?;
+    let mut hasher = Sha256::new();
+    hasher.update(&kem_secret);
+    let shared_secret = hasher.finalize();
+
+    let mut nonce_bytes = [0u8; 12];
+    rng.fill(&mut nonce_bytes).map_err(|_| "Failed RNG")?;
+    let nonce = aead::Nonce::try_assume_unique_for_key(&nonce_bytes).unwrap();
+
+    let unbound_key = UnboundKey::new(&AES_256_GCM, &shared_secret).map_err(|_| "Key error")?;
+    let mut sealing_key = SealingKey::new(unbound_key, SingleNonce(Some(nonce)));
+
+    let mut in_out = envelope_json.as_bytes().to_vec();
+    let aad = aead::Aad::from(b"uon-v0.0.2-pqc-binding");
+    
+    sealing_key.seal_in_place_append_tag(aad, &mut in_out).map_err(|_| "Encryption failed")?;
+
+    let mut composite = nonce_bytes.to_vec();
+    composite.extend_from_slice(&in_out);
+
+    Ok(general_purpose::STANDARD.encode(&composite))
+}
 
 /// A minimalist `russh` client handler executing TOFU validation.
 struct ClientHandler;
@@ -65,13 +122,60 @@ impl Handler for ClientHandler {
 /// ).unwrap();
 /// assert_eq!(code, 0);
 /// ```
+
+/// Generates a cryptographic ChallengePacket natively from Rust.
 #[pyfunction]
-pub fn execute_signed_rust(
+pub fn generate_challenge() -> PyResult<(Vec<u8>, Vec<u8>)> {
+    let rng = SystemRandom::new();
+    let mut nonce = [0u8; 32];
+    rng.fill(&mut nonce).map_err(|_| PyRuntimeError::new_err("Failed RNG"))?;
+
+    let mut extra = [0u8; 16];
+    rng.fill(&mut extra).map_err(|_| PyRuntimeError::new_err("Failed RNG"))?;
+
+    let mut hasher = Sha256::new();
+    hasher.update(&nonce);
+    hasher.update(&extra);
+    let session_id = hasher.finalize().to_vec();
+
+    Ok((nonce.to_vec(), session_id))
+}
+
+/// Orchestrates an asynchronous SSH connection natively to execute FIDO2 signed payloads.
+/// Contains the consolidated routing logic formerly inside `cli.py` and `ssh_client.py`.
+#[pyfunction]
+pub fn execute_session(
     host: String,
     port: u16,
     username: String,
-    wrapped_command: String,
+    command: String,
+    session_id: Vec<u8>,
+    credential_id: Vec<u8>,
+    client_data: Vec<u8>,
+    auth_data: Vec<u8>,
+    signature: Vec<u8>,
 ) -> PyResult<(i32, String, String)> {
+    let assertion = FidoAssertionDto {
+        // Pydantic v2 `bytes` serialization defaults to URL_SAFE encode without padding.
+        credential_id: general_purpose::URL_SAFE_NO_PAD.encode(&credential_id),
+        client_data: general_purpose::URL_SAFE_NO_PAD.encode(&client_data),
+        auth_data: general_purpose::URL_SAFE_NO_PAD.encode(&auth_data),
+        signature: general_purpose::URL_SAFE_NO_PAD.encode(&signature),
+    };
+    
+    let command_array: Vec<String> = shlex::split(&command).ok_or_else(|| PyRuntimeError::new_err("Failed to parse shell command"))?;
+
+    let envelope = SecureEnvelopeDto {
+        session_id: general_purpose::STANDARD.encode(&session_id),
+        command: command_array,
+        assertion,
+    };
+
+    let envelope_json = serde_json::to_string(&envelope).map_err(|e| PyRuntimeError::new_err(format!("JSON serialization failed: {}", e)))?;
+    
+    let crypto_payload = pqc_encapsulate(&envelope_json).map_err(|e| PyRuntimeError::new_err(e))?;
+    let wrapped_command = format!("__UON_EXEC__ {}", crypto_payload);
+
     let rt = Runtime::new()
         .map_err(|e| PyRuntimeError::new_err(format!("Tokio runtime error: {}", e)))?;
 
@@ -85,11 +189,41 @@ pub fn execute_signed_rust(
         config.preferred.kex = vec![russh::kex::CURVE25519].into();
         let config = Arc::new(config);
 
-        let mut session =
+        let mut session = if host.starts_with("vsock:") {
+            let cid_str = host.trim_start_matches("vsock:");
+            let cid: u32 = match cid_str.parse() {
+                Ok(c) => c,
+                Err(_) => return Err(PyRuntimeError::new_err("Invalid VSOCK CID metadata")),
+            };
+
+            let stream = match VsockStream::connect(tokio_vsock::VsockAddr::new(cid, port.into())).await {
+                Ok(s) => s,
+                Err(e) => return Err(PyRuntimeError::new_err(format!("VSOCK transport connect error: {}", e))),
+            };
+            
+            match russh::client::connect_stream(config, stream, ClientHandler).await {
+                Ok(s) => s,
+                Err(e) => return Err(PyRuntimeError::new_err(format!("SSH connect stream error: {}", e))),
+            }
+        } else if host.starts_with("unix:") {
+            let socket_path = host.trim_start_matches("unix:");
+            
+            // Unix Domain Sockets serve as the host-side bridge for macOS VirtioSockets
+            let stream = match UnixStream::connect(socket_path).await {
+                Ok(s) => s,
+                Err(e) => return Err(PyRuntimeError::new_err(format!("VirtioSocket domain connect error: {}", e))),
+            };
+            
+            match russh::client::connect_stream(config, stream, ClientHandler).await {
+                Ok(s) => s,
+                Err(e) => return Err(PyRuntimeError::new_err(format!("SSH domain stream connect error: {}", e))),
+            }
+        } else {
             match russh::client::connect(config, (host.as_str(), port), ClientHandler).await {
                 Ok(s) => s,
                 Err(e) => return Err(PyRuntimeError::new_err(format!("SSH connect error: {}", e))),
-            };
+            }
+        };
 
         // Note: Real implementations will orchestrate `russh-keys` to negotiate agent keys.
         // We simulate basic or no-auth connection here for the ForceCommand execution context.

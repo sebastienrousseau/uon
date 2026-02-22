@@ -245,8 +245,8 @@ class TestRegister:
         auth_data.is_backup_eligible.return_value = True
         server.register_complete.return_value = auth_data
 
-        result = register(user_id=b"u", user_name="x")
-        assert result.backup_eligible is True
+        with pytest.raises(RuntimeError, match="Enterprise Attestation violation"):
+            register(user_id=b"u", user_name="x")
 
     @patch("uon.auth.fido_local._make_server")
     @patch("uon.auth.fido_local._discover_client")

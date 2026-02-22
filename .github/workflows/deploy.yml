@@ -1,0 +1,43 @@
+name: Deploy GH Pages
+
+on:
+  push:
+    branches:
+      - main
+      - feat/v0.0.3
+    paths:
+      - 'src/uon_site/index.html'
+      - 'src/uon_site/articles.html'
+      - 'src/uon_site/faq.html'
+      - 'src/uon_site/download.html'
+      - 'src/uon_site/styles.css'
+      - 'src/uon_site/build.js'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build Static Site
+        run: cd src/uon_site && node build.js
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./src/uon_site/dist
+          publish_branch: gh-pages
+          force_orphan: true
+          # Only publish index.html
+          exclude_assets: '.github,src,scripts,tests,**/*.py,**/*.rs,**/*.toml,**/*.lock'

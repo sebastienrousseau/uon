@@ -425,7 +425,7 @@ def request_signature_via_qr(
 
     Args:
         challenge:      Raw nonce bytes from
-                        ``ssh_client.request_challenge()``.
+                        ``core.generate_challenge()``.
         rp_id:          FIDO2 relying-party ID (e.g. ``"uon.local"``).
         credential_ids: Allowed credential IDs (raw bytes) from the
                         ``TargetStore``.

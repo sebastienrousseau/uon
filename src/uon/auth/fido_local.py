@@ -294,6 +294,12 @@ def register(
     aaguid = str(credential_data.aaguid)
     backup_eligible = auth_data.is_backup_eligible()
 
+    if backup_eligible:
+        raise RuntimeError(
+            "Enterprise Attestation violation: Credential is backup-eligible (synced passkey). "
+            "Under Zero-Trust constraints, only hardware-bound tokens are permitted."
+        )
+
     return RegistrationResult(auth_data, credential_id, aaguid, backup_eligible)
 
 
