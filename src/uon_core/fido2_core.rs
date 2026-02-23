@@ -66,7 +66,7 @@ impl SecureEnvelope {
 
     /// Exposes the protected byte envelope back to the Python FFI orchestrator.
     pub fn get_data<'p>(&self, py: Python<'p>) -> Bound<'p, PyBytes> {
-        PyBytes::new_bound(py, &self.data)
+        PyBytes::new(py, &self.data)
     }
 }
 

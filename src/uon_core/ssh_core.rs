@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use ring::aead::{self, BoundKey, NonceSequence, SealingKey, UnboundKey, AES_256_GCM};
@@ -66,13 +65,12 @@ fn pqc_encapsulate(envelope_json: &str) -> Result<String, String> {
 /// A minimalist `russh` client handler executing TOFU validation.
 struct ClientHandler;
 
-#[async_trait]
 impl Handler for ClientHandler {
     type Error = russh::Error;
 
     async fn check_server_key(
         &mut self,
-        _server_public_key: &russh_keys::key::PublicKey,
+        _server_public_key: &russh::keys::ssh_key::PublicKey,
     ) -> Result<bool, Self::Error> {
         // TOFU validation. Currently allows any host key.
         Ok(true)
