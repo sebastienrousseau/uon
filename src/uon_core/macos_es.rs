@@ -5,8 +5,7 @@ use pyo3::exceptions::PyRuntimeError;
 pub mod macos_es_core {
     use super::*;
     use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::Arc;
-    use endpointsecurity::*; 
+    use endpointsecurity::*;
     use libc;
 
     // Atomic flag to cleanly terminate the ES client loop.

@@ -1,9 +1,9 @@
+#!/usr/bin/env python3
 # Copyright (c) 2026 Sebastien Rousseau
 #
 # Licensed under the GNU AGPLv3 License. See LICENSE file in the project root
 # for full license information.
 
-#!/usr/bin/env python3
 """uon Target Verifier.
 
 Intercepts SSH commands via ForceCommand, validates the FIDO2 WebAuthn
@@ -11,6 +11,7 @@ signature against locally stored COSE public keys, and executes the
 payload only if verification succeeds.
 """
 
+import base64
 import hashlib
 import json
 import os
@@ -61,10 +62,14 @@ def verify_and_execute() -> None:
         print(f"UON Verifier Error: Malformed envelope - {e}", file=sys.stderr)
         sys.exit(1)
 
-    # 3. Parse FIDO2 Assertion Data
-    client_data_bytes = bytes.fromhex(assertion["clientDataJSON"])
-    auth_data_bytes = bytes.fromhex(assertion["authenticatorData"])
-    signature = bytes.fromhex(assertion["signature"])
+    # 3. Parse FIDO2 Assertion Data (URL-safe base64 without padding from Rust core)
+    def _b64url_decode(s: str) -> bytes:
+        padded = s + "=" * (-len(s) % 4)
+        return base64.urlsafe_b64decode(padded)
+
+    client_data_bytes = _b64url_decode(assertion["client_data"])
+    auth_data_bytes = _b64url_decode(assertion["auth_data"])
+    signature = _b64url_decode(assertion["signature"])
 
     _client_data = CollectedClientData(client_data_bytes)
     auth_data = AuthenticatorData(auth_data_bytes)

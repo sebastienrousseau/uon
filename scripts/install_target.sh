@@ -30,10 +30,10 @@ SSHD_CONFIG_FILE="/etc/ssh/sshd_config"
 # SUBNET="${2:-192.168.0.0/16}"
 
 # Textual Output Formatting
-RED='\037[0;31m'
-GREEN='\037[0;32m'
-YELLOW='\037[1;33m'
-NC='\037[0m' # No Color
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
 
 function print_step() { echo -e "${GREEN}==> $1${NC}"; }
 function print_warn() { echo -e "${YELLOW}[!] $1${NC}"; }

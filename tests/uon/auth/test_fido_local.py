@@ -21,6 +21,7 @@ from uon.auth.fido_local import (
     _make_rp,
     _make_server,
     authenticate,
+    prompt_fido2_step_up,
     register,
 )
 
@@ -353,3 +354,53 @@ class TestAuthenticate:
         call_kwargs = server.authenticate_begin.call_args
         creds = call_kwargs.kwargs.get("credentials") or call_kwargs[1].get("credentials")
         assert len(creds) == 3
+
+
+# ── prompt_fido2_step_up() ──────────────────────────────────────────
+
+
+class TestPromptFido2StepUp:
+    @patch("uon.auth.fido_local._make_server")
+    @patch("uon.auth.fido_local._discover_client")
+    def test_success(self, mock_discover: MagicMock, mock_server_fn: MagicMock) -> None:
+        mock_client = MagicMock()
+        mock_discover.return_value = mock_client
+        server = MagicMock()
+        mock_server_fn.return_value = server
+
+        server.authenticate_begin.return_value = (
+            {"publicKey": {"challenge": b"c"}},
+            {"state": "s"},
+        )
+        mock_assertion = MagicMock()
+        mock_response = MagicMock()
+        mock_assertion.get_response.return_value = mock_response
+        mock_client.get_assertion.return_value = mock_assertion
+
+        result = prompt_fido2_step_up(reason="test anomaly")
+        assert result is mock_response
+
+    @patch("uon.auth.fido_local._discover_client")
+    def test_no_authenticator_returns_none(self, mock_discover: MagicMock) -> None:
+        mock_discover.side_effect = NoPlatformAuthenticatorError("none")
+        result = prompt_fido2_step_up()
+        assert result is None
+
+    @patch("uon.auth.fido_local._make_server")
+    @patch("uon.auth.fido_local._discover_client")
+    def test_assertion_error_returns_none(
+        self, mock_discover: MagicMock, mock_server_fn: MagicMock
+    ) -> None:
+        mock_client = MagicMock()
+        mock_discover.return_value = mock_client
+        server = MagicMock()
+        mock_server_fn.return_value = server
+
+        server.authenticate_begin.return_value = (
+            {"publicKey": {"challenge": b"c"}},
+            {"state": "s"},
+        )
+        mock_client.get_assertion.side_effect = RuntimeError("device error")
+
+        result = prompt_fido2_step_up(reason="anomaly")
+        assert result is None

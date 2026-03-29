@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "uon"
-version = "0.0.2"
+version = "0.0.5"
 description = "Ultra-secure, biometric-signed remote terminal execution for macOS, Linux, and WSL."
 authors = [{name = "Sebastien Rousseau", email = "sebastian.rousseau@gmail.com"}]
 license = {text = "AGPL-3.0-or-later"}

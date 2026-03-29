@@ -48,7 +48,6 @@ import base64
 import ipaddress
 import json
 import os
-import re
 import socket
 import sys
 import threading
@@ -73,8 +72,6 @@ BRIDGE_TIMEOUT_SECONDS = 120
 # ---------------------------------------------------------------------------
 # Networking helpers
 # ---------------------------------------------------------------------------
-
-_PRIVATE_RE = re.compile(r"^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)")
 
 
 def _get_lan_ip() -> str:

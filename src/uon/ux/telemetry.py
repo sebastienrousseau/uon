@@ -1,5 +1,7 @@
 # Copyright (c) 2026 Sebastien Rousseau
-# Licensed under the MIT License.
+#
+# Licensed under the GNU AGPLv3 License. See LICENSE file in the project root
+# for full license information.
 
 """Asynchronous Textual TUI for tracking remote Just-In-Time execution TTLs.
 

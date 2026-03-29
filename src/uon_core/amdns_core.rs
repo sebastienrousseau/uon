@@ -7,34 +7,22 @@ type HmacSha256 = Hmac<Sha256>;
 
 /// Computes an AmDNS High-Assurance MAC using SHA-256 for network discovery beacons.
 ///
-/// Under Zero-Trust orchestration, initial UDP/TCP discovery requests cannot be trusted.
-/// The AmDNS (Ambient Discovery Node System) calculates a time-bound HMAC payload locally,
-/// allowing the receiving host to gracefully silently drop unauthenticated pings prior 
-/// to executing costly TCP or SSH subsystem handshakes.
-/// 
-/// # Architecture
-/// 
-/// The `compute_amdns_hmac` generates a string representation derived from the target 
-/// machine alias, concatenated with a precise UNIX epoch timestamp.
-/// 
+/// The timestamp is divided by 30-second windows (TOTP-style) before being
+/// included in the HMAC message. This ensures that `compute_amdns_hmac` and
+/// `verify_discovery_beacon` use the same message format.
+///
 /// # Errors
-/// 
-/// Returns a `PyValueError` if:
-/// * The inbound Bluetooth Low Energy (`ble_secret`) byte array is inherently invalid.
-/// 
-/// # Examples
-/// 
-/// ```rust
-/// use uon_core::amdns_core::compute_amdns_hmac;
-/// let mac = compute_amdns_hmac(b"shared_ble_key", "bastion-1", 1700000000).unwrap();
-/// ```
+///
+/// Returns a `PyValueError` if the BLE secret byte array has an invalid length.
 #[pyfunction]
 pub fn compute_amdns_hmac(
     ble_secret: &[u8],
     target_alias: &str,
     timestamp: u64,
 ) -> PyResult<String> {
-    let message = format!("{}:{}", target_alias, timestamp);
+    // Divide by 30-second window to match verification logic.
+    let window = timestamp / 30;
+    let message = format!("{}:{}", target_alias, window);
     let mut mac = HmacSha256::new_from_slice(ble_secret).map_err(|e| {
         pyo3::exceptions::PyValueError::new_err(format!("Invalid key length: {}", e))
     })?;
@@ -46,34 +34,18 @@ pub fn compute_amdns_hmac(
 
 /// Verifies an incoming AmDNS High-Assurance MAC against a predefined time-tolerance window.
 ///
-/// Acts as the internal validation layer for ambient node discovery. By defaulting the 
-/// acceptance range to 30 seconds (`time_tolerance_seconds`), this function absorbs standard 
-/// network transit delays without sacrificing strict replay-attack resistance.
-/// 
-/// # Architecture
-/// 
-/// `verify_discovery_beacon` executes a rolling three-pane window check (Past, Present, Future)
-/// compensating for slight system clock desynchronization between disparate enterprise domains.
-/// 
+/// Executes a rolling three-pane window check (Past, Present, Future)
+/// compensating for slight system clock desynchronization.
+///
 /// # Safety
-/// 
-/// The validation relies definitively on the `hmac` crate's `verify_slice` implementation 
-/// which executes **Constant-Time Memory Comparisons** to eliminate side-channel timing threats.
-/// 
+///
+/// The validation relies on the `hmac` crate's `verify_slice` implementation
+/// which executes **Constant-Time Memory Comparisons** to eliminate side-channel
+/// timing threats.
+///
 /// # Errors
-/// 
-/// Returns a `PyRuntimeError` if:
-/// * The local host machine's system clock (`SystemTime::now`) is catastrophically distorted 
-///   and cannot resolve the `UNIX_EPOCH`.
-/// 
-/// # Examples
-/// 
-/// ```rust
-/// use uon_core::amdns_core::verify_discovery_beacon;
-/// // Fails if the hex is structurally invalid or explicitly maliciously timed.
-/// let valid = verify_discovery_beacon(b"key", "alias", "bad_hex_mac", 30).unwrap();
-/// assert_eq!(valid, false);
-/// ```
+///
+/// Returns a `PyRuntimeError` if the system clock cannot resolve `UNIX_EPOCH`.
 #[pyfunction]
 #[pyo3(signature = (ble_secret, target_alias, reported_hmac, time_tolerance_seconds=30))]
 pub fn verify_discovery_beacon(

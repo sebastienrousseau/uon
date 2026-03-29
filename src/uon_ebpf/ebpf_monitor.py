@@ -25,7 +25,10 @@ except ImportError:
     HAS_BCC = False
 
 
-# BPF C program to monitor execve syscalls and kill unauthorised spawned shells
+# BPF C program to monitor execve syscalls and kill unauthorised spawned shells.
+# The counter tracks execve calls per monitored PID. The first execve (the
+# legitimate command itself) is allowed; any subsequent execve (shell pivot /
+# breakout) triggers SIGKILL.
 _BPF_TEXT = """
 #include <uapi/linux/ptrace.h>
 #include <linux/sched.h>
@@ -35,12 +38,16 @@ BPF_HASH(authorized_pids, u32, u32);
 
 int restrict_execve(struct pt_regs *ctx, const char __user *filename) {
     u32 pid = bpf_get_current_pid_tgid() >> 32;
-    u32 *is_auth = authorized_pids.lookup(&pid);
+    u32 *call_count = authorized_pids.lookup(&pid);
 
-    if (is_auth != NULL) {
-        // Enforce boundary: Kill process if it attempts recursive execve()
-        // preventing shell breakouts from the JIT boundary.
-        bpf_send_signal(9);
+    if (call_count != NULL) {
+        // The first execve (count == 0) is the legitimate command launch.
+        // Any subsequent execve indicates a shell pivot or breakout attempt.
+        if (*call_count > 0) {
+            bpf_send_signal(9);
+        }
+        u32 new_count = *call_count + 1;
+        authorized_pids.update(&pid, &new_count);
     }
     return 0;
 }
@@ -75,8 +82,11 @@ class KernelMonitor:
             logging.error(f"Failed to compile eBPF sandbox: {e}")
 
     def monitor_pid(self, pid: int) -> None:
-        """Add a specific process ID to the strict kernel sandbox whitelist."""
+        """Add a specific process ID to the strict kernel sandbox whitelist.
+
+        The counter starts at 0 -- the first execve is the legitimate command
+        launch and is allowed through.  Subsequent execve calls are killed.
+        """
         if self.bpf is not None:
             auth_map = self.bpf.get_table("authorized_pids")
-            # Enforce restrictions on the passed PID
-            auth_map[self.bpf.Key(pid)] = self.bpf.Leaf(1)
+            auth_map[self.bpf.Key(pid)] = self.bpf.Leaf(0)

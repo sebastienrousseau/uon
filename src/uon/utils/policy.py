@@ -189,8 +189,13 @@ class PolicyStore:
 
     def _save(self) -> None:
         """Atomically write the allowlist to disk."""
+        import sys as _sys
+
         payload = sorted(self._aaguids)
         tmp = self._path.with_suffix(".tmp")
         with tmp.open("w", encoding="utf-8") as fh:
             json.dump(payload, fh, indent=2)
+        # Restrict permissions before replacing to prevent information disclosure.
+        if _sys.platform != "win32":
+            tmp.chmod(0o600)
         os.replace(tmp, self._path)

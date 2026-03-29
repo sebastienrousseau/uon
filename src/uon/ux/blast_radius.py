@@ -1,5 +1,7 @@
 # Copyright (c) 2026 Sebastien Rousseau
-# Licensed under the MIT License.
+#
+# Licensed under the GNU AGPLv3 License. See LICENSE file in the project root
+# for full license information.
 
 """Pre-execution static analysis for explainable blast radius via Textual UI.
 

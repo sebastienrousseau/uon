@@ -1,5 +1,7 @@
 # Copyright (c) 2026 Sebastien Rousseau
-# Licensed under the MIT License.
+#
+# Licensed under the GNU AGPLv3 License. See LICENSE file in the project root
+# for full license information.
 
 """UX Orchestrator for handling CAEP Anomalies via Textual Overlays.
 
@@ -16,8 +18,8 @@ from textual.containers import Center, Grid
 from textual.screen import ModalScreen
 from textual.widgets import Button, Label, Static
 
-from uon.auth.fido_local import prompt_fido2_step_up
-from uon.core import freeze_execution, resume_execution
+from uon.auth.fido_local import prompt_fido2_step_up  # type: ignore[attr-defined]
+from uon import core  # type: ignore[import-untyped,import-not-found]
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +115,7 @@ def handle_caep_anomaly(pid: int, anomaly_details: str) -> bool:
     """
     try:
         # Swiftly freeze the execution via Rust core to mitigate damage
-        freeze_execution(pid)
+        core.freeze_execution(pid)
     except Exception as e:
         logger.error(f"Failed to freeze ephemeral execution: {e}")
         return False
@@ -123,7 +125,7 @@ def handle_caep_anomaly(pid: int, anomaly_details: str) -> bool:
     cleared = app.run() or False
 
     if cleared:
-        resume_execution(pid)
+        core.resume_execution(pid)
         return True
 
     # Process remains frozen or is assumed dead

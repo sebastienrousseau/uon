@@ -69,6 +69,11 @@ from fido2.webauthn import (
 if TYPE_CHECKING:
     from fido2.webauthn import AuthenticatorAssertionResponse, AuthenticatorData
 
+    class _StepUpResult:
+        """Type stub for step-up authentication result."""
+
+        signature: bytes
+
 
 # ---------------------------------------------------------------------------
 # Relying-party defaults
@@ -366,3 +371,50 @@ def authenticate(
     assertion_response = client.get_assertion(request_options["publicKey"])
     # Return the first assertion (single authenticator expected).
     return assertion_response.get_response(0)  # type: ignore[return-value]
+
+
+def prompt_fido2_step_up(reason: str = "") -> AuthenticatorAssertionResponse | None:
+    """Perform a FIDO2 step-up authentication for CAEP anomaly resolution.
+
+    Generates a fresh challenge, prompts the user for biometric verification,
+    and returns the assertion response. Used by the CAEP intervention UX to
+    demand hardware-backed re-authentication before resuming a frozen process.
+
+    Args:
+        reason: Human-readable description of the anomaly that triggered
+            the step-up challenge.  Displayed to stderr for operator
+            awareness.
+
+    Returns:
+        The ``AuthenticatorAssertionResponse`` if the user successfully
+        authenticates, or ``None`` if no authenticator is available.
+    """
+    import os
+
+    if reason:
+        print(f"Step-up authentication required: {reason}", file=sys.stderr)
+
+    try:
+        client = _discover_client(RP_ID)
+    except NoPlatformAuthenticatorError:
+        return None
+
+    server = _make_server()
+
+    # Generate a fresh step-up challenge.
+    challenge = os.urandom(32)
+
+    request_options, _state = server.authenticate_begin(
+        credentials=[],
+        user_verification=UserVerificationRequirement.REQUIRED,
+    )
+
+    options_dict = dict(request_options["publicKey"])
+    options_dict["challenge"] = challenge
+    request_options = {"publicKey": options_dict}  # type: ignore[assignment]
+
+    try:
+        assertion_response = client.get_assertion(request_options["publicKey"])
+        return assertion_response.get_response(0)  # type: ignore[return-value]
+    except Exception:
+        return None

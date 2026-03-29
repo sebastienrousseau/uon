@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import click.testing
 import pytest
@@ -48,21 +47,6 @@ def tmp_policy_file(tmp_path: Path) -> Path:
 def policy_store(tmp_policy_file: Path) -> PolicyStore:
     """Return a PolicyStore backed by a temporary file."""
     return PolicyStore(path=tmp_policy_file)
-
-
-@pytest.fixture
-def mock_paramiko_client() -> MagicMock:
-    """A MagicMock standing in for ``paramiko.SSHClient``."""
-    client = MagicMock()
-    stdout_chan = MagicMock()
-    stdout_chan.recv_exit_status.return_value = 0
-    stdout_mock = MagicMock()
-    stdout_mock.read.return_value = b"hello\n"
-    stdout_mock.channel = stdout_chan
-    stderr_mock = MagicMock()
-    stderr_mock.read.return_value = b""
-    client.exec_command.return_value = (MagicMock(), stdout_mock, stderr_mock)
-    return client
 
 
 @pytest.fixture

@@ -258,4 +258,7 @@ class TargetStore:
         tmp = self._path.with_suffix(".tmp")
         with tmp.open("w", encoding="utf-8") as fh:
             json.dump(payload, fh, indent=2)
+        # Restrict permissions before replacing to prevent information disclosure.
+        if sys.platform != "win32":
+            tmp.chmod(0o600)
         tmp.replace(self._path)
