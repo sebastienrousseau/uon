@@ -323,10 +323,10 @@ pub fn execute_session(
                 .map_err(|e| PyRuntimeError::new_err(format!("SSH agent identity request failed: {}", e)))?;
 
             let mut authenticated = false;
-            for key in &identities {
+            for identity in &identities {
                 match session.authenticate_publickey_with(
                     &username,
-                    key.clone(),
+                    identity.public_key().into_owned(),
                     None,
                     &mut agent,
                 ).await {
