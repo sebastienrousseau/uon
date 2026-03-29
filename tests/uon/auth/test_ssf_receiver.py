@@ -72,11 +72,13 @@ class TestSSFReceiver:
         assert response.status_code == 200
         assert response.json()["status"] == "accepted"
 
-        # Verify pkill was called to terminate sessions
+        # Verify pkill was called to terminate sessions scoped to subject
         mock_run.assert_called_once()
         args = mock_run.call_args[0][0]
         assert "pkill" in args
-        assert "uon_verifier.py" in args
+        pattern = args[-1]
+        assert "uon_verifier.py" in pattern
+        assert "admin@example.com" in pattern
 
     @patch("uon.auth.ssf_receiver.subprocess.run")
     def test_irrelevant_event(self, mock_run: MagicMock, client: TestClient) -> None:

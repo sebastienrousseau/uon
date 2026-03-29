@@ -21,6 +21,7 @@ from __future__ import annotations
 import hmac
 import logging
 import os
+import shlex
 import subprocess
 from typing import Any
 
@@ -59,7 +60,7 @@ def _verify_bearer_token(request: Request) -> None:
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing Bearer token")
-    token = auth_header[len("Bearer "):]
+    token = auth_header[len("Bearer ") :]
     if not hmac.compare_digest(token, _SSF_SHARED_SECRET):
         raise HTTPException(status_code=401, detail="Invalid Bearer token")
 
@@ -72,7 +73,11 @@ def kill_uon_sessions(subject_identifier: str) -> None:
     """
     logging.warning("SSF Revocation received for %s! Terminating sessions.", subject_identifier)
     try:
-        pkill_cmd = ["pkill", "-9", "-f", "uon_verifier.py"]
+        if subject_identifier:
+            pattern = f"uon_verifier.py.*{shlex.quote(subject_identifier)}"
+        else:
+            pattern = "uon_verifier.py"
+        pkill_cmd = ["pkill", "-9", "-f", pattern]
         subprocess.run(pkill_cmd, check=False)  # noqa: S603
     except Exception as e:
         logging.error("Failed to terminate uon sessions: %s", e)

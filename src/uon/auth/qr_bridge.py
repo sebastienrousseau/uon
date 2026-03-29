@@ -45,11 +45,14 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hmac
 import ipaddress
 import json
 import os
 import socket
+import ssl
 import sys
+import tempfile
 import threading
 import time
 from typing import Any
@@ -222,8 +225,12 @@ def _build_app(
     def _check_token(request: Request) -> None:
         """Reject requests that lack a valid bearer token in header or query param."""
         auth = request.headers.get("Authorization", "")
-        query_token = request.query_params.get("token")
-        if auth != f"Bearer {bearer_token}" and query_token != bearer_token:
+        query_token = request.query_params.get("token", "")
+        header_match = auth.startswith("Bearer ") and hmac.compare_digest(
+            auth[len("Bearer ") :], bearer_token
+        )
+        query_match = hmac.compare_digest(query_token, bearer_token)
+        if not header_match and not query_match:
             raise HTTPException(status_code=403, detail="Invalid token")
 
     # -- Client IP guard --
@@ -371,6 +378,58 @@ def _print_qr(url: str) -> None:
     print(f"\nOr open: {url}\n", file=sys.stderr)
 
 
+def _generate_ephemeral_ssl_context() -> ssl.SSLContext:
+    """Generate an in-memory self-signed TLS certificate and return an SSLContext.
+
+    The private key and certificate exist only in memory — nothing is written
+    to disk.  Uses ``cryptography`` (already a project dependency) to create
+    an ECDSA P-256 key pair valid for 1 hour.
+    """
+    import datetime
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.x509.oid import NameOID
+
+    key = ec.generate_private_key(ec.SECP256R1())
+    subject = issuer = x509.Name(
+        [
+            x509.NameAttribute(NameOID.COMMON_NAME, "uon-qr-bridge"),
+        ]
+    )
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(issuer)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(datetime.datetime.now(datetime.UTC))
+        .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(hours=1))
+        .sign(key, hashes.SHA256())
+    )
+
+    # Write to temporary files only long enough to load the SSLContext,
+    # then immediately delete them.
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    with (
+        tempfile.NamedTemporaryFile(suffix=".pem", delete=True) as cert_f,
+        tempfile.NamedTemporaryFile(suffix=".pem", delete=True) as key_f,
+    ):
+        cert_f.write(cert.public_bytes(serialization.Encoding.PEM))
+        cert_f.flush()
+        key_f.write(
+            key.private_bytes(
+                serialization.Encoding.PEM,
+                serialization.PrivateFormat.TraditionalOpenSSL,
+                serialization.NoEncryption(),
+            )
+        )
+        key_f.flush()
+        ctx.load_cert_chain(cert_f.name, key_f.name)
+    return ctx
+
+
 class _ServerThread(threading.Thread):
     """Run uvicorn in a daemon thread with controlled shutdown.
 
@@ -385,15 +444,21 @@ class _ServerThread(threading.Thread):
         port: Bind port (typically ``BRIDGE_PORT``).
     """
 
-    def __init__(self, app: FastAPI, host: str, port: int) -> None:
+    def __init__(
+        self, app: FastAPI, host: str, port: int, ssl_context: ssl.SSLContext | None = None
+    ) -> None:
         """Configure a daemon thread with a uvicorn server bound to *host:port*."""
         super().__init__(daemon=True)
+        ssl_kwargs: dict[str, Any] = {}
+        if ssl_context is not None:
+            ssl_kwargs["ssl"] = ssl_context
         config = uvicorn.Config(
             app,
             host=host,
             port=port,
             log_level="error",
             access_log=False,
+            **ssl_kwargs,
         )
         self.server = uvicorn.Server(config)
 
@@ -467,9 +532,10 @@ def request_signature_via_qr(
     )
 
     lan_ip = _get_lan_ip()
-    url = f"http://{lan_ip}:{BRIDGE_PORT}/sign?token={bearer_token}"
+    ssl_ctx = _generate_ephemeral_ssl_context()
+    url = f"https://{lan_ip}:{BRIDGE_PORT}/sign?token={bearer_token}"
 
-    server_thread = _ServerThread(app, host="0.0.0.0", port=BRIDGE_PORT)  # noqa: S104
+    server_thread = _ServerThread(app, host="0.0.0.0", port=BRIDGE_PORT, ssl_context=ssl_ctx)  # noqa: S104
     server_thread.start()
 
     # Give the server a moment to bind.

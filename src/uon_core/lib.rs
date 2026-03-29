@@ -1,3 +1,9 @@
+// Copyright (c) 2026 Sebastien Rousseau
+//
+// This file is part of uon.
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 //! Core execution and cryptographic enforcement bounds for `uon`.
 //!
 //! This crate acts as the monolithic Rust bedrock for the Python UI orchestrator. 

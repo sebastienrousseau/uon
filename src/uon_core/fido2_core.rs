@@ -1,3 +1,9 @@
+// Copyright (c) 2026 Sebastien Rousseau
+//
+// This file is part of uon.
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use zeroize::Zeroize;
@@ -43,13 +49,25 @@ impl SecureEnvelope {
         unsafe {
             let ptr = vec.as_mut_ptr() as *mut libc::c_void;
             let len = vec.capacity();
-            libc::mlock(ptr, len);
+            if libc::mlock(ptr, len) != 0 {
+                eprintln!(
+                    "[uon] WARNING: mlock failed (errno {}); secrets may page to swap",
+                    *libc::__errno_location(),
+                );
+            }
 
             #[cfg(target_os = "linux")]
-            libc::madvise(ptr, len, libc::MADV_DONTDUMP);
+            if libc::madvise(ptr, len, libc::MADV_DONTDUMP) != 0 {
+                eprintln!(
+                    "[uon] WARNING: madvise(MADV_DONTDUMP) failed (errno {})",
+                    *libc::__errno_location(),
+                );
+            }
 
             #[cfg(target_os = "macos")]
-            libc::madvise(ptr, len, libc::MADV_ZERO_WIRED_PAGES);
+            if libc::madvise(ptr, len, libc::MADV_ZERO_WIRED_PAGES) != 0 {
+                eprintln!("[uon] WARNING: madvise(MADV_ZERO_WIRED_PAGES) failed");
+            }
         }
         SecureEnvelope { data: vec }
     }
@@ -62,15 +80,16 @@ impl SecureEnvelope {
 
 impl Drop for SecureEnvelope {
     fn drop(&mut self) {
+        // Zeroize FIRST while memory is still locked to physical RAM,
+        // preventing secrets from paging to swap between munlock and zeroize.
+        self.data.zeroize();
+
         #[cfg(unix)]
         unsafe {
             let ptr = self.data.as_mut_ptr() as *mut libc::c_void;
             let len = self.data.capacity();
-            // Unlock the memory pages before freeing.
             libc::munlock(ptr, len);
         }
-        // Securely scrub the buffer contents before deallocation.
-        self.data.zeroize();
     }
 }
 

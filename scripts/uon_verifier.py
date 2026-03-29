@@ -16,6 +16,7 @@ import hashlib
 import json
 import os
 import sys
+import time
 from typing import Any
 
 from fido2 import cbor
@@ -24,7 +25,44 @@ from fido2.webauthn import AuthenticatorData, CollectedClientData
 
 # Path to the stored public keys on the target machine
 AUTHORIZED_KEYS_FILE = os.path.expanduser("~/.config/uon/authorized_passkeys.json")
+USED_SESSIONS_FILE = os.path.expanduser("~/.config/uon/used_sessions.json")
 UON_RP_ID = b"uon.local"
+SESSION_TTL_SECONDS = 300  # 5 minutes — envelope lifetime
+
+
+def _load_nonce_cache() -> dict[str, float]:
+    """Load the used session nonce cache, purging entries older than 5 minutes."""
+    if not os.path.exists(USED_SESSIONS_FILE):
+        return {}
+    try:
+        with open(USED_SESSIONS_FILE) as f:
+            cache: dict[str, float] = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return {}
+    now = time.time()
+    return {sid: ts for sid, ts in cache.items() if now - ts < SESSION_TTL_SECONDS}
+
+
+def _save_nonce_cache(cache: dict[str, float]) -> None:
+    """Persist the nonce cache with restrictive permissions."""
+    config_dir = os.path.dirname(USED_SESSIONS_FILE)
+    os.makedirs(config_dir, mode=0o700, exist_ok=True)
+    fd = os.open(USED_SESSIONS_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(cache, f)
+    except Exception:  # noqa: S110 — best-effort persistence
+        pass
+
+
+def _check_replay(session_id: str) -> None:
+    """Reject replayed session IDs and record the current one."""
+    cache = _load_nonce_cache()
+    if session_id in cache:
+        print("UON Verifier Error: Replay detected — session already used.", file=sys.stderr)
+        sys.exit(1)
+    cache[session_id] = time.time()
+    _save_nonce_cache(cache)
 
 
 def load_authorized_keys() -> list[dict[str, Any]]:
@@ -56,11 +94,18 @@ def verify_and_execute() -> None:
 
         envelope = json.loads(decoded_payload)
         payload = envelope
+        session_id = payload.get("session_id", "")
         command = payload["command"]
         assertion = payload["assertion"]
     except Exception as e:
         print(f"UON Verifier Error: Malformed envelope - {e}", file=sys.stderr)
         sys.exit(1)
+
+    # 2b. Replay Protection
+    if not session_id:
+        print("UON Verifier Error: Missing session_id in envelope.", file=sys.stderr)
+        sys.exit(1)
+    _check_replay(session_id)
 
     # 3. Parse FIDO2 Assertion Data (URL-safe base64 without padding from Rust core)
     def _b64url_decode(s: str) -> bytes:
@@ -129,7 +174,7 @@ def verify_and_execute() -> None:
     from uon import core  # type: ignore[import-untyped]
 
     try:
-        # spawn_zsp_process performs: GroupAdd -> Spawn Sudo -> apply_ebpf_sandbox -> Wait -> GroupDel
+        # spawn_zsp_process: GroupAdd -> Sudo -> eBPF sandbox -> Wait -> GroupDel
         exit_code = core.spawn_zsp_process(command)
         sys.exit(exit_code)
     except Exception as e:

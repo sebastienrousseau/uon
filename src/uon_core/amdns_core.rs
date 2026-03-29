@@ -1,3 +1,9 @@
+// Copyright (c) 2026 Sebastien Rousseau
+//
+// This file is part of uon.
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use hmac::{Hmac, Mac};
 use pyo3::prelude::*;
 use sha2::Sha256;
@@ -71,7 +77,9 @@ pub fn verify_discovery_beacon(
     ];
 
     for offset in offsets {
-        let window = ((current_time as i64 + offset) as u64) / time_tolerance_seconds;
+        // Always divide by 30 to match compute_amdns_hmac's hardcoded window.
+        // time_tolerance_seconds is only used for the time offsets above.
+        let window = ((current_time as i64 + offset) as u64) / 30;
         let message = format!("{}:{}", target_alias, window);
 
         let mut mac = HmacSha256::new_from_slice(ble_secret).map_err(|e| {

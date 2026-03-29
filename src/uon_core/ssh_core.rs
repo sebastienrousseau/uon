@@ -317,19 +317,27 @@ pub fn execute_session(
             .map_err(|e| PyRuntimeError::new_err(format!("SSH authentication failed: {}", e)))?;
         if !auth_result.success() {
             // Attempt publickey auth via the local SSH agent.
-            let agent_auth = session.authenticate_publickey_with(
-                &username,
-                russh_keys::agent::client::AgentClient::connect_env().await
-                    .map_err(|e| PyRuntimeError::new_err(format!("SSH agent unavailable: {}", e)))?,
-            ).await;
-            match agent_auth {
-                Ok(result) if result.success() => {},
-                Ok(_) => return Err(PyRuntimeError::new_err(
+            let mut agent = russh::keys::agent::client::AgentClient::connect_env().await
+                .map_err(|e| PyRuntimeError::new_err(format!("SSH agent unavailable: {}", e)))?;
+            let identities = agent.request_identities().await
+                .map_err(|e| PyRuntimeError::new_err(format!("SSH agent identity request failed: {}", e)))?;
+
+            let mut authenticated = false;
+            for key in &identities {
+                match session.authenticate_publickey_with(
+                    &username,
+                    key.clone(),
+                    None,
+                    &mut agent,
+                ).await {
+                    Ok(result) if result.success() => { authenticated = true; break; },
+                    Ok(_) | Err(_) => continue,
+                }
+            }
+            if !authenticated {
+                return Err(PyRuntimeError::new_err(
                     "SSH authentication failed: no accepted credentials"
-                )),
-                Err(e) => return Err(PyRuntimeError::new_err(
-                    format!("SSH agent authentication error: {}", e)
-                )),
+                ));
             }
         }
 

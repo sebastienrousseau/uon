@@ -26,9 +26,10 @@ class TestAmDNS:
         ble_secret = b"12345678901234567890123456789012"
         alias = "prod-node"
 
-        # Valid window dynamically matching the current rust evaluation
-        current_window = int(time.time()) // 30
-        expected_hmac = compute_amdns_hmac(ble_secret, alias, current_window)
+        # compute_amdns_hmac divides the timestamp by 30 internally,
+        # so we pass the raw current time (not pre-divided).
+        now = int(time.time())
+        expected_hmac = compute_amdns_hmac(ble_secret, alias, now)
         assert verify_discovery_beacon(ble_secret, alias, expected_hmac) is True
 
     def test_verify_beacon_drift(self) -> None:
@@ -36,8 +37,8 @@ class TestAmDNS:
         alias = "dev-db"
 
         # Simulate beacon computed from the previous window due to clock drift
-        previous_window = (int(time.time()) - 30) // 30
-        old_hmac = compute_amdns_hmac(ble_secret, alias, previous_window)
+        now = int(time.time()) - 30
+        old_hmac = compute_amdns_hmac(ble_secret, alias, now)
         assert verify_discovery_beacon(ble_secret, alias, old_hmac) is True
 
     def test_verify_beacon_invalid(self) -> None:
@@ -48,5 +49,5 @@ class TestAmDNS:
         assert verify_discovery_beacon(ble_secret, alias, "deadbeef" * 8) is False
 
         # Wrong alias
-        wrong_window_hmac = compute_amdns_hmac(ble_secret, "wrong-alias", int(time.time()) // 30)
+        wrong_window_hmac = compute_amdns_hmac(ble_secret, "wrong-alias", int(time.time()))
         assert verify_discovery_beacon(ble_secret, alias, wrong_window_hmac) is False

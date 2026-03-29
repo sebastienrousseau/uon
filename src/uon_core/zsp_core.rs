@@ -78,10 +78,21 @@ pub fn spawn_zsp_process(command: &str) -> PyResult<i32> {
         ));
     }
 
-    // Execute the inner command under the context of the JIT group bounding sandbox
-    let mut child = Command::new("sudo")
-        .args(["-g", &jit_group, "sh", "-c", command])
-        .spawn()
+    // Execute the inner command under the context of the JIT group bounding sandbox.
+    // Use shlex to parse the command into discrete arguments, avoiding sh -c shell
+    // interpretation which is vulnerable to metacharacter injection.
+    let mut child = if let Some(cmd_parts) = shlex::split(command) {
+        Command::new("sudo")
+            .arg("-g")
+            .arg(&jit_group)
+            .args(&cmd_parts)
+            .spawn()
+    } else {
+        // Fall back to sh -c only for complex shell syntax that shlex cannot parse.
+        Command::new("sudo")
+            .args(["-g", &jit_group, "sh", "-c", command])
+            .spawn()
+    }
         .map_err(|e| {
             // Guarantee cleanup if spawn explicitly panics / terminates early
             let _ = Command::new("sudo")

@@ -51,6 +51,20 @@ int restrict_execve(struct pt_regs *ctx, const char __user *filename) {
     }
     return 0;
 }
+
+TRACEPOINT_PROBE(sched, sched_process_fork) {
+    // Propagate sandbox tracking from parent to child on fork.
+    // Without this, a monitored process could fork() then exec() in the
+    // child to bypass the execve counter.
+    u32 parent_pid = args->parent_pid;
+    u32 child_pid = args->child_pid;
+    u32 *parent_count = authorized_pids.lookup(&parent_pid);
+    if (parent_count != NULL) {
+        u32 inherited = *parent_count;
+        authorized_pids.update(&child_pid, &inherited);
+    }
+    return 0;
+}
 """
 
 
