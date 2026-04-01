@@ -1,56 +1,69 @@
-# Cryptographic Hardening & Post-Quantum Readiness
-# Security & PQC Documentation
+# Security and PQC Status
 
-This document officially outlines the Zero-Trust cryptographic model, memory safety hygiene, and Post-Quantum Cryptography (PQC) readiness for the `uon` platform, strictly adhering to 2026 NIST and CNSA 2.0 standards.
+`uon` signs every remote command with FIDO2 and verifies that signature on the target before execution. This document explains the current security model, what is implemented today, and where the PQC story is still transitional.
 
-## 1. Security Assumptions
+## Current Security Model
 
-The Zero-Trust execution capability of this platform operates under the following adversarial threat model:
+### What `uon` protects well
 
-* **Assume Compromised Networks:** All local discovery (mDNS), IP traffic, and SSH loopbacks (VM VSOCKs) are susceptible to interception and spoofing.
-* **Assume Compromised OS Space:** The parent Python execution environment may be probed or dumped by malicious rootkits, requiring heavy delegation to hardware enclaves and memory-pinned C-FFI partitions.
-* **No Physical Fallback:** We assume the adversary DOES NOT have physical possession of the target's FIDO2 hardware authenticator, minimizing physical extraction vectors.
-* **Store No Secrets:** The device holds no long-lived asymmetric private keys on disk.
+| Area | Current behavior |
+|---|---|
+| Private key handling | Private keys stay inside the authenticator and are not written to disk. |
+| Remote execution gate | OpenSSH `ForceCommand` routes configured sessions through `uon_verifier.py`. |
+| Replay protection | The target records used `session_id` values and rejects reuse. |
+| Execution isolation | Approved commands go through a persistent broker that drops to the target UID plus the fixed `uon-exec` group. |
+| Host verification | The controller uses Trust On First Use and then pins host keys locally. |
 
-## 2. Cryptographic Inventory
+### Threat model assumptions
 
-| Subsystem | Operation | Primitive | Standard | Hardening Status |
-| --- | --- | --- | --- | --- |
-| **Transport Envelope** | Payload Encapsulation | `AES-256-GCM` | FIPS 197 / SP 800-38D | ✅ Modern Default. Avoids CBC modes. |
-| **Key Derivation** | KEM Secret Hashing | `SHA-256` | FIPS 180-4 | ✅ Secure. Used to hash the local RNG seeds. |
-| **Authentication** | Hardware Assertions | `CTAP2 / WebAuthn` | FIDO Alliance | ✅ Hardware Enclave Bound via `fido2`. |
-| **Zero-Trust Discovery** | AmDNS Beacons | `HMAC-SHA256` | FIPS 198-1 | ✅ Native Rust validation wrapper. |
-| **Transport Security** | SSH Handshake | `CURVE25519` | RFC 7748 | ⚠️ Legacy Fallback. PQC wrapper handles primary defense. |
+- The network may be observed or tampered with.
+- The controller may be less trusted than the authenticator itself.
+- The target must verify every command independently.
+- Physical possession of the authenticator is out of scope for this model.
 
----
+## Cryptographic Inventory
 
-## 3. Post-Quantum Cryptography (PQC) Roadmap
+| Subsystem | Primitive | Status | Notes |
+|---|---|---|---|
+| Envelope encryption | `AES-256-GCM` | Current | Used inside the wrapped execution payload. |
+| Key derivation | `SHA-256` | Current | Used in the envelope path. |
+| User authentication | WebAuthn / CTAP2 | Current | Hardware-backed assertion verification. |
+| Discovery beacons | `HMAC-SHA256` | Current | Used in the AmDNS path. |
+| SSH key exchange | `CURVE25519` | Transitional | Still used because the Rust SSH layer does not yet expose native ML-KEM support. |
 
-> [!WARNING]
-> **PQC Protocol Degradation Notice**
-> The underlying Rust SSH transport (`russh`) currently lacks native parsing for ML-KEM standards (`sntrup761x25519-sha512@openssh.com`). 
+## PQC Status
 
-To force CNSA 2.0 compliance, `uon` implements a **Hybrid PQC Wrapper Model**:
+### What is true today
 
-1. **Inner Envelope (PQC Ready):** All FIDO2 execution assertions are encrypted utilizing `AES-256-GCM` (using Rust's `ring` crate) before touching outer transport. AES-256 is mathematically considered quantum-resistant to Grover's Algorithm.
-2. **Outer Envelope (Classical):** The SSH traversal utilizes `CURVE25519`. 
-3. **Future Patches:** Once `tokio`/`russh` formalizes FIPS 204 ML-DSA and ML-KEM key exchange parameters in 2026 upstream, the secondary `CURVE25519` shell will be aggressively rotated to native PQC bindings.
+- `uon` does not provide end-to-end native post-quantum SSH key exchange today.
+- `uon` does wrap the inner execution envelope before it reaches the target verifier.
+- The SSH transport itself still depends on classical primitives in the current `russh` stack.
 
----
+### What this means in practice
 
-## 4. Side-Channel & Memory Mitigations
+The current design is a hybrid posture, not a fully PQC-native transport. That is stronger than plaintext command transit inside SSH alone, but weaker than a transport with native ML-KEM support from the SSH layer outward.
 
-### Memory Zeroing & Pinning
-All sensitive FIDO2 payloads handled natively are locked to physical RAM.
-* **Rust `zeroize` Crate:** Implements `ZeroizeOnDrop` allowing definitive scrubber sweeps of cryptographic credentials as soon as the `SecureEnvelope` drops out of scope.
-* **OS Pinning (`mlock`):** Memory is pinned (`libc::mlock`) preventing sensitive structures from being paged to disk via SWAP.
-* **Core-Dump Prevention:** Linux utilizes `MADV_DONTDUMP` and macOS utilizes `MADV_ZERO_WIRED_PAGES` to block memory extraction via unauthorized process dumps.
+## Memory and Side-Channel Notes
 
-### Constant-Time Execution
-* **AmDNS Validation:** `amdns_core.rs` calculates incoming HMAC signatures and validates them using the `hmac::verify_slice` generic. This enforces a **Constant-Time Comparison** at the CPU level, mathematically nullifying timing attacks.
+### Implemented controls
 
----
+- Rust-side sensitive paths use crates and patterns intended to reduce lingering secret material.
+- The codebase includes support for zeroing and memory-handling hardening in native paths.
+- HMAC validation is designed around constant-time comparison helpers.
 
-> [!CAUTION]
-> **Rust Ring RNG Constraints**
-> The `AES-256-GCM` encapsulation layer relies on `ring::rand::SystemRandom`. This securely maps to the OS-level CSPRNG (e.g., `/dev/urandom` or `getrandom`). Ensure underlying Host OS Entropy pools are not starved in highly-virtualized minimal containers.
+### Important limitation
+
+This repo does not currently present a formal third-party validation package, benchmark-backed side-channel report, or external compliance certification. Treat the security model as implemented engineering, not certified assurance.
+
+## Operator Checklist
+
+1. Use the documented Linux target deployment flow with `install_target.sh`.
+2. Keep `authorized_passkeys.json` synchronized with the passkeys you intend to trust.
+3. Review `known_hosts` entries on first connection and after target rebuilds.
+4. Treat QR bridge usage as a fallback path, not the primary operator flow.
+5. Track upstream SSH library progress before claiming PQC-complete transport.
+
+## Related Docs
+
+- [README](../README.md)
+- [Release Notes](releases/)

@@ -1,21 +1,27 @@
-# uon — FIDO2-Signed Remote Terminal Execution
+# uon — FIDO2-Signed Remote Command Execution
 
-**uon** replaces password- and key-file-based SSH authentication with hardware-bound FIDO2 passkeys, guaranteeing Zero-Trust execution bounds. Every remote command is cryptographically signed by your device's Secure Enclave (Touch ID, Windows Hello, or a USB security key) before the target machine will execute it. No private key material ever touches disk.
+`uon` runs remote commands only after a fresh FIDO2 approval. It replaces reusable SSH trust for command execution with per-command hardware-backed verification, then routes approved commands through a least-privilege broker on the target.
 
 ---
 
+## Quick Answer
+
+| Question | Answer |
+|---|---|
+| What is `uon`? | A CLI for FIDO2-signed remote command execution. |
+| What problem does it solve? | It removes reusable trust for remote execution and requires a new hardware approval for every command. |
+| How does it work? | The controller signs a challenge, the target verifies the envelope through `ForceCommand`, then a persistent broker runs the approved command under a restricted identity. |
+| Who is this guide for? | Operators setting up a controller on macOS, Linux, or WSL and deploying Linux targets with OpenSSH and systemd. |
+
 ## Architecture & Mental Model
 
-### The Intent
-Traditional SSH lets anyone with a private key file run commands. If that file is stolen, the attacker asserts full access over your infrastructure. uon eliminates the static file entirely — your private key lives securely inside tamper-resistant hardware and can never be exported.
-
-### The Mental Model
-Think of `uon` as a cryptographic courier. Instead of unlocking a permanent shell, `uon` packages your literal command (e.g., `uptime`) into a Zero-Trust envelope, forces you to physically prove your presence via a hardware signature, and then transmits that verified envelope across the wire. 
+`uon` is not a shell replacement. It is a signed command courier. You submit one command, approve one hardware prompt, and the target either verifies and runs that command or rejects it.
 
 ### Platform Constraints
-* **macOS**: Leverages Apple Secure Enclave & Touch ID natively.
-* **Windows**: Hooks into Windows Hello cryptography.
-* **Linux/WSL**: Negotiates physical USB security keys (YubiKey/SoloKey) directly.
+
+* **Controller:** macOS, Linux, and WSL are the primary documented controller environments.
+* **Automated target deployment:** Linux with OpenSSH and systemd.
+* **Authenticators:** Touch ID, Windows Hello, or a USB security key. If local signing fails, `uon` falls back to the QR bridge.
 
 ---
 
@@ -36,13 +42,13 @@ Think of `uon` as a cryptographic courier. Instead of unlocking a permanent shel
 
 ### The Execution Lifecycle
 
-Every time you run a command, `uon` enforces the following zero-trust flow:
+Every time you run a command, `uon` enforces this flow:
 
 1. **Local Invocation**: You cast `uon my-server "uptime"` on your laptop (the **controller**).
 2. **Hardware Signature**: `uon` drops into native bounds, asking your hardware to **sign** a one-time cryptographic challenge. You confirm with Touch ID, Windows Hello, or a YubiKey tap.
 3. **Transport**: The signed command travels over SSH to the **target** server.
 4. **Verifiable Telemetry**: The target's OpenSSH `ForceCommand` intercepts the payload. A specialized verifier mathematically confirms the signature originated from your physical hardware.
-5. **Execution & Teardown**: Upon validation, the kernel spins up an ephemeral execution group, executes your command, and streams the output directly back to your terminal.
+5. **Execution**: Upon validation, the verifier forwards the command to a persistent Zero Standing Privilege broker. The broker drops to the target UID plus the fixed `uon-exec` group, runs the command, and returns stdout, stderr, and exit code.
 
 > **QR Fallback**: If your laptop lid is closed or you lack USB keys, `uon` automatically displays a **QR code** in your terminal. You scan it with your phone, sign the challenge securely, and the command proceeds.
 
@@ -68,11 +74,14 @@ or more **targets** (the remote machines you want to control).
 
 | Requirement                   | Details                                                                                  |
 |-------------------------------|------------------------------------------------------------------------------------------|
-| Operating system              | macOS or Linux (any distribution with OpenSSH server)                                    |
+| Operating system              | Linux with OpenSSH and systemd for the documented automated install flow                 |
 | OpenSSH server                | Version 8.2+ recommended.  Check with `sshd -V`.                                        |
-| Python 3.8+                   | For the verifier script.  Check with `python3 --version`.                                |
+| Python                        | Python 3.12+ is the documented path for the target-side verifier and broker scripts     |
 | `fido2` Python package        | Install with `pip3 install fido2>=1.1`.  Only needed on the target.                      |
 | Existing SSH access           | You must be able to `ssh user@target` with a key or password today.  uon builds on top.  |
+| systemd                       | Required by `install_target.sh` to run `uon-zsp-broker.service`                          |
+
+The codebase contains additional platform work for macOS and WSL-oriented paths, but this README documents the Linux target installation flow because that is the deployable path in the repo today.
 
 ### Platform-specific notes
 
@@ -328,9 +337,10 @@ curl -sL https://raw.githubusercontent.com/sebastienrousseau/uon/main/scripts/in
 
 **What the install script handles natively:**
 1. **Verifier Scaffolding:** Downloads the `uon_verifier.py` hook securely into `/usr/local/bin/`.
-2. **Payload Enforcement:** Idempotently hooks your `~/.ssh/authorized_keys` to intercept all connections natively via `command="/usr/local/bin/uon_verifier.py"`.
-3. **Daemon Hardening:** Strips legacy access controls inside `/etc/ssh/sshd_config` (disables password authentication, keyboards, and enforces verification).
-4. **Validation/Rollback:** Executes a strict `sshd -t` pre-flight check, immediately restoring target backups if the configuration fails to validate.
+2. **Persistent ZSP Broker:** Installs `uon_zsp_broker.py`, provisions the static `uon-exec` least-privilege group, and enables the `uon-zsp-broker.service` systemd unit that owns the execution boundary.
+3. **Payload Enforcement:** Idempotently hooks your `~/.ssh/authorized_keys` to intercept all connections natively via `command="/usr/local/bin/uon_verifier.py"`.
+4. **Daemon Hardening:** Strips legacy access controls inside `/etc/ssh/sshd_config` (disables password authentication, keyboards, and enforces verification).
+5. **Validation/Rollback:** Executes a strict `sshd -t` pre-flight check, immediately restoring target backups if the configuration fails to validate.
 
 > **Warning:** After hardening, traditional password login is permanently disabled.
 
@@ -417,32 +427,34 @@ self-destructs after one use or after 120 seconds.
 
 ### `uon <target> "<command>"`
 
-Executes a signed command remotely on a registered target.
+Run a signed remote command on a registered target.
 
-#### # Examples
+#### Examples
 
 ```bash
 uon my-server "uptime"
 uon my-server "cat /etc/hostname"
 ```
 
-#### # Errors
-* Returns standard exit code `> 0` natively aligning with the remote command's executed failure state.
-* Panics locally if the security envelope exceeds the hardware memory threshold or fails base64 transit.
+#### Common failures
+
+- Exits with the remote command's non-zero exit code if the command itself fails.
+- Exits with code `1` if the target is unknown, no credential is enrolled, or the signed execution path fails before the command is run remotely.
 
 ### `uon add <alias> <host> [--port PORT] [--user USER]`
 
-Registers a new target machine definition persistently into the local Zero-Trust config store.
+Register a target in the local config store.
 
-#### # Examples
+#### Examples
 
 ```bash
 uon add prod 10.0.0.5 --port 2222 --user deploy
 uon add pi 192.168.1.42 --user pi
 ```
 
-#### # Errors
-* Overwrites silently if a target with the same `<alias>` already exists in the store.
+#### Behavior
+
+- Replaces any existing target with the same alias.
 
 | Option    | Default | Description                          |
 |-----------|---------|--------------------------------------|
@@ -451,9 +463,9 @@ uon add pi 192.168.1.42 --user pi
 
 ### `uon list`
 
-Enumerates all registered targets and their enrolled credential counts iteratively.
+List all registered targets and enrolled credential counts.
 
-#### # Examples
+#### Example
 
 ```bash
 $ uon list
@@ -463,16 +475,19 @@ $ uon list
 
 ### `uon register <alias> [--user-name NAME]`
 
-Enrolls a FIDO2 passkey for a specific target by triggering a biometric or physical-touch prompt natively at the hardware level.
+Enroll a FIDO2 credential for a target.
 
-#### # Examples
+#### Example
 
 ```bash
 uon register prod
 ```
 
-#### # Errors
-* Panics returning `PyRuntimeError` if the specified `<alias>` target does not already exist.
+#### Common failures
+
+- Exits with code `1` if the target does not exist.
+- Exits with code `1` if no compatible authenticator is available.
+- Exits with code `1` if the active AAGUID policy rejects the credential.
 
 | Option         | Default                        | Description                           |
 |----------------|--------------------------------|---------------------------------------|
@@ -480,22 +495,23 @@ uon register prod
 
 ### `uon remove <alias>`
 
-Un-registers a target securely from the state store.
+Remove a target from the local config store.
 
-#### # Examples
+#### Example
 
 ```bash
 uon remove prod
 ```
 
-#### # Errors
-* Exits immediately with code `1` if the provided alias cannot be resolved.
+#### Common failures
+
+- Exits with code `1` if the alias does not exist.
 
 ---
 
 ## Architecture
 
-```
+```text
 src/uon/
 ├── __init__.py              # Package root
 ├── cli.py                   # Click CLI — entry point, subcommands, exec flow
@@ -503,51 +519,48 @@ src/uon/
 │   ├── __init__.py
 │   ├── fido_local.py        # Platform authenticator (Touch ID / Hello / HID)
 │   └── qr_bridge.py         # Ephemeral LAN web server + QR fallback
+├── contracts/
+│   ├── __init__.py
+│   └── fido_dto.py          # Signed execution DTOs
 ├── transport/
 │   ├── __init__.py
-│   └── ssh_client.py        # Paramiko SSH transport + envelope protocol
-└── utils/
-    ├── __init__.py
-    ├── config.py            # Target store (JSON persistence)
-    └── policy.py            # AAGUID attestation policy (allowlist)
+│   ├── amdns.py             # Discovery beacon helpers
+│   └── pqc.py               # PQC helper layer
+├── utils/
+│   ├── __init__.py
+│   ├── config.py            # Target store
+│   └── policy.py            # AAGUID policy store
+├── core.pyi                 # Typed Rust extension boundary
+└── core.*.so                # Compiled PyO3 extension
+
+src/uon_core/
+├── lib.rs                   # Python module exports
+├── ssh_core.rs              # SSH execution path
+└── zsp_core.rs              # Broker client bridge
 
 scripts/
-├── harden_target.sh         # Remote SSHD hardening script
+├── benchmark_hot_paths.py   # Hot-path benchmark harness
+├── harden_target.sh         # Legacy hardening helper
+├── install_target.sh        # Target deployment script
+├── setup_uon.py             # Local passkey registration + key export
 ├── uon_verifier.py          # Target-side FIDO2 signature verifier
-└── setup_uon.py             # Local passkey registration + key export
+└── uon_zsp_broker.py        # Persistent least-privilege broker
 ```
 
 ### Authentication Flow
 
-```
-┌──────────────────┐                      ┌──────────────────┐
-│   CONTROLLER     │                      │     TARGET       │
-│   (your laptop)  │                      │  (remote server) │
-└────────┬─────────┘                      └────────┬─────────┘
-         │                                         │
-         │  1. Generate 32-byte random nonce       │
-         │                                         │
-         │  2. Sign nonce with FIDO2 hardware      │
-         │     (Touch ID / Hello / USB key / QR)   │
-         │                                         │
-         │  3. Wrap command + signature in          │
-         │     __UON_EXEC__ JSON envelope          │
-         │                                         │
-         │  4. SSH exec_command() ────────────────►│
-         │                                         │
-         │                              5. ForceCommand triggers
-         │                                 uon_verifier.py
-         │                                         │
-         │                              6. Decode envelope,
-         │                                 verify RP ID hash,
-         │                                 verify user presence,
-         │                                 verify FIDO2 signature
-         │                                 against stored public key
-         │                                         │
-         │                              7. If valid: execute command
-         │                                 If invalid: reject (exit 1)
-         │                                         │
-         │  ◄──── stdout / stderr / exit code ─────│
+```text
+Controller
+1. Generate a fresh challenge
+2. Sign it with a local authenticator or the QR bridge
+3. Send `__UON_EXEC__ <payload>` over SSH
+
+Target
+4. OpenSSH ForceCommand invokes `uon_verifier.py`
+5. The verifier decapsulates the payload and validates the FIDO2 assertion
+6. Approved commands are forwarded to `uon_zsp_broker.py`
+7. The broker drops to the target UID + `uon-exec` group
+8. stdout, stderr, and exit code are returned to the controller
 ```
 
 ### Tiered Authentication
@@ -566,31 +579,33 @@ anything.
 
 ### Envelope Protocol
 
-Commands are transmitted as `__UON_EXEC__ <base64-json>`, where the
-JSON payload contains:
+Commands are transmitted as `__UON_EXEC__ <payload>`. The outer payload
+is base64-encoded and decapsulated on the target before the verifier
+parses the inner JSON envelope.
+
+Current decrypted envelope shape:
 
 ```json
 {
-    "version": 1,
-    "command": "uptime",
-    "challenge": "<base64-nonce>",
-    "session_id": "<base64-sha256>",
-    "assertion": {
-        "credentialId": "<base64>",
-        "authenticatorData": "<base64>",
-        "clientDataJSON": "<base64>",
-        "signature": "<base64>"
-    }
+  "session_id": "<base64>",
+  "command": "uptime",
+  "assertion": {
+    "credential_id": "<base64url>",
+    "client_data": "<base64url>",
+    "auth_data": "<base64url>",
+    "signature": "<base64url>"
+  }
 }
 ```
 
-The target's verifier decodes and verifies every field before executing
-the inner `command`.
+The verifier rejects the request if the session is replayed, the RP ID
+hash is wrong, the user-presence bit is missing, or no stored public key
+verifies the signature.
 
 ### Config Storage
 
-uon stores target definitions locally in a JSON file.  No secrets are
-stored — only hostnames, ports, usernames, and public credential IDs.
+`uon` stores target definitions locally in a JSON file. No private key
+material is written to disk.
 
 | Platform    | Config file location                                  |
 |-------------|-------------------------------------------------------|
@@ -602,15 +617,16 @@ stored — only hostnames, ports, usernames, and public credential IDs.
 
 ## Security Model
 
-| Property             | Implementation                                                                          |
-|----------------------|-----------------------------------------------------------------------------------------|
-| Zero-disk secrets    | Private keys live exclusively inside hardware secure enclaves.  Nothing is written to `~/.ssh` or any config file. |
-| Per-command signing  | Every remote execution requires a fresh biometric or physical-touch approval.  There is no session persistence. |
-| Challenge-response   | A 32-byte random nonce + SHA-256 session binding prevents replay attacks across sessions. |
-| ForceCommand         | Even if the SSH transport key is stolen, the target rejects commands without a valid FIDO2 hardware signature. |
-| Network isolation    | The QR bridge restricts CORS to RFC 1918 (private) IP addresses and requires a one-time 32-byte bearer token. |
-| TOFU                 | Host keys are accepted on first contact (Trust-On-First-Use), consistent with standard SSH behaviour.  Host-key pinning is planned for a future release. |
-| RP ID                | The relying party ID is `uon.local` — a non-routable domain that prevents phishing redirects. |
+| Property             | Implementation |
+|----------------------|----------------|
+| Zero-disk secrets    | Private keys remain inside hardware authenticators. |
+| Per-command signing  | Every execution requires a fresh approval. |
+| Replay protection    | The target tracks used `session_id` values and rejects reuse. |
+| ForceCommand gate    | Configured SSH sessions are routed through `uon_verifier.py`. |
+| Least-privilege exec | Approved commands run through a persistent broker that drops to the target UID plus the fixed `uon-exec` group. |
+| TOFU                 | Host keys are accepted on first contact and then pinned in `known_hosts`. |
+| QR bridge scope      | The QR fallback is local-network oriented and time-bound. |
+| RP ID                | The relying party ID is `uon.local`. |
 
 ---
 
@@ -678,7 +694,7 @@ the signed envelope.  Check:
 
 ### Locked out after hardening
 
-If you cannot log in after running `harden_target.sh`, you need
+If you cannot log in after running `install_target.sh`, you need
 console access (physical terminal, cloud provider's web console, or
 out-of-band management).  Once in, restore the backup:
 

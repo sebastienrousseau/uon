@@ -183,6 +183,7 @@ class TargetStore:
         """Load existing targets from *path*, creating an empty store if the file is absent."""
         self._path = path
         self._targets: dict[str, Target] = {}
+        self._serialized_payload: str | None = None
         self._load()
 
     # ------------------------------------------------------------------
@@ -219,6 +220,8 @@ class TargetStore:
             target: The ``Target`` to persist.  If a target with the
                 same ``alias`` already exists, it is silently replaced.
         """
+        if self._targets.get(target.alias) == target:
+            return
         self._targets[target.alias] = target
         self._save()
 
@@ -247,18 +250,27 @@ class TargetStore:
         if not self._path.exists():
             return
         with self._path.open("r", encoding="utf-8") as fh:
-            raw: list[dict[str, object]] = json.load(fh)
+            payload = fh.read()
+        self._serialized_payload = payload
+        raw: list[dict[str, object]] = json.loads(payload)
         for entry in raw:
             t = Target.from_dict(entry)
             self._targets[t.alias] = t
 
     def _save(self) -> None:
         """Atomically write all targets to disk (write to ``.tmp``, then ``os.replace``)."""
-        payload = [asdict(t) for t in self._targets.values()]
+        payload = [
+            asdict(self._targets[alias])
+            for alias in sorted(self._targets)
+        ]
+        serialized_payload = json.dumps(payload, separators=(",", ":"), sort_keys=True)
+        if serialized_payload == self._serialized_payload:
+            return
         tmp = self._path.with_suffix(".tmp")
         with tmp.open("w", encoding="utf-8") as fh:
-            json.dump(payload, fh, indent=2)
+            fh.write(serialized_payload)
         # Restrict permissions before replacing to prevent information disclosure.
         if sys.platform != "win32":
             tmp.chmod(0o600)
         tmp.replace(self._path)
+        self._serialized_payload = serialized_payload
