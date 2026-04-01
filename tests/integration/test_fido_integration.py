@@ -16,5 +16,5 @@ def test_spawn_zsp_process_integration() -> None:
         result = spawn_zsp_process("uptime")
         assert isinstance(result, int)
     except Exception:
-        with pytest.raises(Exception, match=r"(?i)sudo|group"):
+        with pytest.raises(Exception, match=r"(?i)broker|socket|zsp|group"):
             spawn_zsp_process("uptime")
