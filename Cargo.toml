@@ -34,11 +34,6 @@ futures = "0.3"
 async-trait = "0.1"
 dirs-next = "2.0"
 
-# macOS-only dependencies
-[target.'cfg(target_os = "macos")'.dependencies]
-endpointsecurity = "0.3.0"
-crossbeam-channel = "0.5.15"
-
 # Wasm conditional dependencies (Browser-based execution)
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2"
