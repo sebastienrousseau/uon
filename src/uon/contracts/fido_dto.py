@@ -43,9 +43,7 @@ class SecureEnvelopeDto(BaseModel):
     session_id: str = Field(
         ..., description="The unique Type 4 UUID identifying this execution session."
     )
-    command: list[str] = Field(
-        ..., description="The strict POSIX argument array (e.g. ['cat', '/etc/hostname'])."
-    )
+    command: str = Field(..., description="The shell command to execute on the target.")
     assertion: FidoAssertionDto = Field(
         ..., description="The cryptographic WebAuthn assertion proving physical presence."
     )

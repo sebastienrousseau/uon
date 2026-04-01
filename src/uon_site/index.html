@@ -188,8 +188,8 @@
         <article class="card article-card cursor-pointer">
           <span class="tag">Security</span>
           <h3>Zero Standing Privilege (ZSP) Explained</h3>
-          <p>Understanding how JIT privilege escalation via ephemeral sandbox execution profiles secures critical
-            infrastructure.</p>
+          <p>Understanding how a persistent least-privilege execution broker secures critical infrastructure without
+            per-command privilege churn.</p>
         </article>
         <article class="card article-card cursor-pointer">
           <span class="tag">Cryptography</span>
@@ -215,8 +215,9 @@
           <summary>What is Zero Standing Privilege (ZSP)?</summary>
           <div class="faq-content">
             <p>ZSP ensures that no user has persistent access to the target machine. uon intercepts the connection
-              request, evaluates the FIDO2 signature, and dynamically spawns an ephemeral <code>uon-exec</code> Linux
-              group specifically for that session, tearing it down immediately after termination.</p>
+              request, evaluates the FIDO2 signature, then hands execution to a persistent root-owned broker that
+              drops each approved command into the target UID plus the fixed <code>uon-exec</code> least-privilege
+              group.</p>
           </div>
         </details>
         <details class="faq-item">

@@ -1,19 +1,20 @@
+use base64::{engine::general_purpose, Engine as _};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use ring::aead::{self, BoundKey, NonceSequence, SealingKey, UnboundKey, AES_256_GCM};
 use ring::rand::{SecureRandom, SystemRandom};
-use sha2::{Digest, Sha256};
-use base64::{engine::general_purpose, Engine as _};
-use serde::Serialize;
 use russh::client::Handler;
 use russh::ChannelMsg;
+use serde::Serialize;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::Arc;
-use tokio::runtime::Runtime;
+use std::sync::{Arc, OnceLock, RwLock};
+use std::time::SystemTime;
 use tokio::net::UnixStream;
+use tokio::runtime::{Builder, Runtime};
 use tokio_vsock::VsockStream;
 
 #[derive(Serialize)]
@@ -27,7 +28,7 @@ struct FidoAssertionDto {
 #[derive(Serialize)]
 struct SecureEnvelopeDto {
     session_id: String,
-    command: Vec<String>,
+    command: String,
     assertion: FidoAssertionDto,
 }
 
@@ -49,7 +50,7 @@ const PQC_AAD: &[u8] = b"uon-pqc-v1";
 /// This is a placeholder for real ML-KEM encapsulation; the SSH channel already
 /// provides transport encryption, so including the secret alongside the ciphertext
 /// does not weaken the security model (defense-in-depth inner layer).
-fn pqc_encapsulate(envelope_json: &str) -> Result<String, String> {
+fn pqc_encapsulate(envelope_json: &[u8]) -> Result<String, String> {
     let rng = SystemRandom::new();
     let mut kem_secret = [0u8; 32];
     rng.fill(&mut kem_secret).map_err(|_| "Failed RNG")?;
@@ -64,18 +65,31 @@ fn pqc_encapsulate(envelope_json: &str) -> Result<String, String> {
     let unbound_key = UnboundKey::new(&AES_256_GCM, &shared_secret).map_err(|_| "Key error")?;
     let mut sealing_key = SealingKey::new(unbound_key, SingleNonce(Some(nonce)));
 
-    let mut in_out = envelope_json.as_bytes().to_vec();
+    let mut in_out = Vec::with_capacity(envelope_json.len() + AES_256_GCM.tag_len());
+    in_out.extend_from_slice(envelope_json);
     let aad = aead::Aad::from(PQC_AAD);
 
-    sealing_key.seal_in_place_append_tag(aad, &mut in_out).map_err(|_| "Encryption failed")?;
+    sealing_key
+        .seal_in_place_append_tag(aad, &mut in_out)
+        .map_err(|_| "Encryption failed")?;
 
     // Output: kem_secret(32) || nonce(12) || ciphertext+tag
-    let mut composite = kem_secret.to_vec();
+    let mut composite = Vec::with_capacity(kem_secret.len() + nonce_bytes.len() + in_out.len());
+    composite.extend_from_slice(&kem_secret);
     composite.extend_from_slice(&nonce_bytes);
     composite.extend_from_slice(&in_out);
 
     Ok(general_purpose::STANDARD.encode(&composite))
 }
+
+#[derive(Default)]
+struct KnownHostsCache {
+    modified_at: Option<SystemTime>,
+    entries: HashMap<String, String>,
+}
+
+static KNOWN_HOSTS_CACHE: OnceLock<RwLock<KnownHostsCache>> = OnceLock::new();
+static TOKIO_RUNTIME: OnceLock<Runtime> = OnceLock::new();
 
 // ---------------------------------------------------------------------------
 // Known-hosts TOFU implementation
@@ -100,22 +114,64 @@ fn known_hosts_path() -> PathBuf {
     config_dir.join("known_hosts")
 }
 
-/// Load known host keys from the uon known_hosts file.
-fn load_known_hosts() -> HashMap<String, String> {
-    let path = known_hosts_path();
+fn parse_known_hosts(contents: &str) -> HashMap<String, String> {
     let mut map = HashMap::new();
-    if let Ok(contents) = fs::read_to_string(&path) {
-        for line in contents.lines() {
-            let line = line.trim();
-            if line.is_empty() || line.starts_with('#') {
-                continue;
-            }
-            if let Some((host_key, fingerprint)) = line.split_once(' ') {
-                map.insert(host_key.to_string(), fingerprint.to_string());
-            }
+    for line in contents.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if let Some((host_key, fingerprint)) = line.split_once(' ') {
+            map.insert(host_key.to_string(), fingerprint.to_string());
         }
     }
     map
+}
+
+fn cache_modified_at(path: &PathBuf) -> Option<SystemTime> {
+    fs::metadata(path)
+        .ok()
+        .and_then(|metadata| metadata.modified().ok())
+}
+
+fn tokio_runtime() -> Result<&'static Runtime, String> {
+    if let Some(runtime) = TOKIO_RUNTIME.get() {
+        return Ok(runtime);
+    }
+
+    let runtime = Builder::new_multi_thread()
+        .enable_all()
+        .thread_name("uon-ssh")
+        .build()
+        .map_err(|e| format!("Tokio runtime error: {}", e))?;
+    let _ = TOKIO_RUNTIME.set(runtime);
+
+    TOKIO_RUNTIME
+        .get()
+        .ok_or_else(|| "Tokio runtime initialization failed".to_string())
+}
+
+/// Load known host keys from the uon known_hosts file.
+fn load_known_hosts() -> HashMap<String, String> {
+    let path = known_hosts_path();
+    let modified_at = cache_modified_at(&path);
+    let cache = KNOWN_HOSTS_CACHE.get_or_init(|| RwLock::new(KnownHostsCache::default()));
+
+    if let Ok(guard) = cache.read() {
+        if guard.modified_at == modified_at {
+            return guard.entries.clone();
+        }
+    }
+
+    let contents = fs::read_to_string(&path).unwrap_or_default();
+    let entries = parse_known_hosts(&contents);
+
+    if let Ok(mut guard) = cache.write() {
+        guard.modified_at = modified_at;
+        guard.entries = entries.clone();
+    }
+
+    entries
 }
 
 /// Persist a new host key fingerprint to the known_hosts file.
@@ -208,10 +264,12 @@ impl Handler for ClientHandler {
 pub fn generate_challenge() -> PyResult<(Vec<u8>, Vec<u8>)> {
     let rng = SystemRandom::new();
     let mut nonce = [0u8; 32];
-    rng.fill(&mut nonce).map_err(|_| PyRuntimeError::new_err("Failed RNG"))?;
+    rng.fill(&mut nonce)
+        .map_err(|_| PyRuntimeError::new_err("Failed RNG"))?;
 
     let mut extra = [0u8; 16];
-    rng.fill(&mut extra).map_err(|_| PyRuntimeError::new_err("Failed RNG"))?;
+    rng.fill(&mut extra)
+        .map_err(|_| PyRuntimeError::new_err("Failed RNG"))?;
 
     let mut hasher = Sha256::new();
     hasher.update(&nonce);
@@ -242,21 +300,21 @@ pub fn execute_session(
         signature: general_purpose::URL_SAFE_NO_PAD.encode(&signature),
     };
 
-    let command_array: Vec<String> = shlex::split(&command).ok_or_else(|| PyRuntimeError::new_err("Failed to parse shell command"))?;
-
     let envelope = SecureEnvelopeDto {
         session_id: general_purpose::STANDARD.encode(&session_id),
-        command: command_array,
+        command,
         assertion,
     };
 
-    let envelope_json = serde_json::to_string(&envelope).map_err(|e| PyRuntimeError::new_err(format!("JSON serialization failed: {}", e)))?;
+    let envelope_json = serde_json::to_vec(&envelope)
+        .map_err(|e| PyRuntimeError::new_err(format!("JSON serialization failed: {}", e)))?;
 
-    let crypto_payload = pqc_encapsulate(&envelope_json).map_err(|e| PyRuntimeError::new_err(e))?;
-    let wrapped_command = format!("__UON_EXEC__ {}", crypto_payload);
+    let crypto_payload = pqc_encapsulate(&envelope_json).map_err(PyRuntimeError::new_err)?;
+    let mut wrapped_command = String::with_capacity("__UON_EXEC__ ".len() + crypto_payload.len());
+    wrapped_command.push_str("__UON_EXEC__ ");
+    wrapped_command.push_str(&crypto_payload);
 
-    let rt = Runtime::new()
-        .map_err(|e| PyRuntimeError::new_err(format!("Tokio runtime error: {}", e)))?;
+    let rt = tokio_runtime().map_err(PyRuntimeError::new_err)?;
 
     rt.block_on(async {
         let mut config = russh::client::Config::default();
@@ -269,12 +327,7 @@ pub fn execute_session(
         let config = Arc::new(config);
 
         // Determine the host identifier for TOFU known_hosts tracking.
-        let tofu_host = if host.starts_with("vsock:") || host.starts_with("unix:") {
-            host.clone()
-        } else {
-            host.clone()
-        };
-        let handler = ClientHandler::new(&tofu_host, port);
+        let handler = ClientHandler::new(&host, port);
 
         let mut session = if host.starts_with("vsock:") {
             let cid_str = host.trim_start_matches("vsock:");
@@ -283,26 +336,47 @@ pub fn execute_session(
                 Err(_) => return Err(PyRuntimeError::new_err("Invalid VSOCK CID metadata")),
             };
 
-            let stream = match VsockStream::connect(tokio_vsock::VsockAddr::new(cid, port.into())).await {
-                Ok(s) => s,
-                Err(e) => return Err(PyRuntimeError::new_err(format!("VSOCK transport connect error: {}", e))),
-            };
+            let stream =
+                match VsockStream::connect(tokio_vsock::VsockAddr::new(cid, port.into())).await {
+                    Ok(s) => s,
+                    Err(e) => {
+                        return Err(PyRuntimeError::new_err(format!(
+                            "VSOCK transport connect error: {}",
+                            e
+                        )))
+                    },
+                };
 
             match russh::client::connect_stream(config, stream, handler).await {
                 Ok(s) => s,
-                Err(e) => return Err(PyRuntimeError::new_err(format!("SSH connect stream error: {}", e))),
+                Err(e) => {
+                    return Err(PyRuntimeError::new_err(format!(
+                        "SSH connect stream error: {}",
+                        e
+                    )))
+                },
             }
         } else if host.starts_with("unix:") {
             let socket_path = host.trim_start_matches("unix:");
 
             let stream = match UnixStream::connect(socket_path).await {
                 Ok(s) => s,
-                Err(e) => return Err(PyRuntimeError::new_err(format!("VirtioSocket domain connect error: {}", e))),
+                Err(e) => {
+                    return Err(PyRuntimeError::new_err(format!(
+                        "VirtioSocket domain connect error: {}",
+                        e
+                    )))
+                },
             };
 
             match russh::client::connect_stream(config, stream, handler).await {
                 Ok(s) => s,
-                Err(e) => return Err(PyRuntimeError::new_err(format!("SSH domain stream connect error: {}", e))),
+                Err(e) => {
+                    return Err(PyRuntimeError::new_err(format!(
+                        "SSH domain stream connect error: {}",
+                        e
+                    )))
+                },
             }
         } else {
             match russh::client::connect(config, (host.as_str(), port), handler).await {
@@ -313,30 +387,40 @@ pub fn execute_session(
 
         // Authenticate via ssh-agent (forwarded keys). Falls back to none-auth
         // only if the agent is unavailable (e.g. ForceCommand-only targets).
-        let auth_result = session.authenticate_none(&username).await
+        let auth_result = session
+            .authenticate_none(&username)
+            .await
             .map_err(|e| PyRuntimeError::new_err(format!("SSH authentication failed: {}", e)))?;
         if !auth_result.success() {
             // Attempt publickey auth via the local SSH agent.
-            let mut agent = russh::keys::agent::client::AgentClient::connect_env().await
+            let mut agent = russh::keys::agent::client::AgentClient::connect_env()
+                .await
                 .map_err(|e| PyRuntimeError::new_err(format!("SSH agent unavailable: {}", e)))?;
-            let identities = agent.request_identities().await
-                .map_err(|e| PyRuntimeError::new_err(format!("SSH agent identity request failed: {}", e)))?;
+            let identities = agent.request_identities().await.map_err(|e| {
+                PyRuntimeError::new_err(format!("SSH agent identity request failed: {}", e))
+            })?;
 
             let mut authenticated = false;
             for identity in &identities {
-                match session.authenticate_publickey_with(
-                    &username,
-                    identity.public_key().into_owned(),
-                    None,
-                    &mut agent,
-                ).await {
-                    Ok(result) if result.success() => { authenticated = true; break; },
+                match session
+                    .authenticate_publickey_with(
+                        &username,
+                        identity.public_key().into_owned(),
+                        None,
+                        &mut agent,
+                    )
+                    .await
+                {
+                    Ok(result) if result.success() => {
+                        authenticated = true;
+                        break;
+                    },
                     Ok(_) | Err(_) => continue,
                 }
             }
             if !authenticated {
                 return Err(PyRuntimeError::new_err(
-                    "SSH authentication failed: no accepted credentials"
+                    "SSH authentication failed: no accepted credentials",
                 ));
             }
         }
@@ -350,8 +434,8 @@ pub fn execute_session(
             return Err(PyRuntimeError::new_err(format!("SSH exec error: {}", e)));
         }
 
-        let mut stdout = Vec::new();
-        let mut stderr = Vec::new();
+        let mut stdout = Vec::with_capacity(4096);
+        let mut stderr = Vec::with_capacity(1024);
         let mut exit_status = 0;
 
         while let Some(msg) = channel.wait().await {

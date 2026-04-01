@@ -80,7 +80,9 @@ def _import_verifier() -> Any:
 
 @pytest.fixture
 def verifier() -> Any:
-    return _import_verifier()
+    mod = _import_verifier()
+    mod._AUTHORIZED_KEYS_CACHE = None
+    return mod
 
 
 @pytest.fixture
@@ -232,7 +234,9 @@ class TestSignatureVerification:
             pytest.raises(SystemExit) as exc_info,
         ):
             verifier.verify_and_execute()
-        return exc_info.value.code
+        code = exc_info.value.code
+        assert isinstance(code, int)
+        return code
 
     def test_rp_id_mismatch_rejected(
         self,
@@ -379,3 +383,23 @@ class TestNonceCache:
         nonce_cache.write_text("{corrupt json!!!")
         cache = verifier._load_nonce_cache()
         assert cache == {}
+
+
+class TestAuthorizedKeyCache:
+    def test_cached_key_load_skips_reparse(self, verifier: Any, keys_file: Path) -> None:
+        keys_file.write_text(json.dumps([{"cose_key_hex": "a0"}]))
+
+        mock_key = MagicMock()
+        parse_mock = MagicMock(return_value=mock_key)
+        decode_mock = MagicMock(return_value={})
+
+        verifier.CoseKey = MagicMock(parse=parse_mock)
+        verifier.cbor = MagicMock(decode=decode_mock)
+
+        first = verifier.load_authorized_keys()
+        second = verifier.load_authorized_keys()
+
+        assert first == [mock_key]
+        assert second == [mock_key]
+        assert parse_mock.call_count == 1
+        assert decode_mock.call_count == 1

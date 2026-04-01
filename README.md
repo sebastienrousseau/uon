@@ -328,9 +328,10 @@ curl -sL https://raw.githubusercontent.com/sebastienrousseau/uon/main/scripts/in
 
 **What the install script handles natively:**
 1. **Verifier Scaffolding:** Downloads the `uon_verifier.py` hook securely into `/usr/local/bin/`.
-2. **Payload Enforcement:** Idempotently hooks your `~/.ssh/authorized_keys` to intercept all connections natively via `command="/usr/local/bin/uon_verifier.py"`.
-3. **Daemon Hardening:** Strips legacy access controls inside `/etc/ssh/sshd_config` (disables password authentication, keyboards, and enforces verification).
-4. **Validation/Rollback:** Executes a strict `sshd -t` pre-flight check, immediately restoring target backups if the configuration fails to validate.
+2. **Persistent ZSP Broker:** Installs `uon_zsp_broker.py`, provisions the static `uon-exec` least-privilege group, and enables the `uon-zsp-broker.service` systemd unit that owns the execution boundary.
+3. **Payload Enforcement:** Idempotently hooks your `~/.ssh/authorized_keys` to intercept all connections natively via `command="/usr/local/bin/uon_verifier.py"`.
+4. **Daemon Hardening:** Strips legacy access controls inside `/etc/ssh/sshd_config` (disables password authentication, keyboards, and enforces verification).
+5. **Validation/Rollback:** Executes a strict `sshd -t` pre-flight check, immediately restoring target backups if the configuration fails to validate.
 
 > **Warning:** After hardening, traditional password login is permanently disabled.
 
@@ -544,8 +545,16 @@ scripts/
          │                                 verify FIDO2 signature
          │                                 against stored public key
          │                                         │
-         │                              7. If valid: execute command
-         │                                 If invalid: reject (exit 1)
+         │                              7. If valid: dispatch command
+         │                                 to persistent ZSP broker
+         │                                 running as root
+         │
+         │                              8. Broker drops to target UID
+         │                                 + fixed uon-exec group,
+         │                                 executes command, returns
+         │                                 stdout / stderr / exit code
+         │
+         │                              9. If invalid: reject (exit 1)
          │                                         │
          │  ◄──── stdout / stderr / exit code ─────│
 ```

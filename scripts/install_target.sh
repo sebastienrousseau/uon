@@ -24,6 +24,11 @@ AUTH_KEYS="$SSH_DIR/authorized_keys"
 CONFIG_DIR="$TARGET_HOME/.config/uon"
 
 VERIFIER_DEST="/usr/local/bin/uon_verifier.py"
+BROKER_DEST="/usr/local/libexec/uon_zsp_broker.py"
+BROKER_ENV_FILE="/etc/default/uon-zsp-broker"
+BROKER_SERVICE_FILE="/etc/systemd/system/uon-zsp-broker.service"
+BROKER_SOCKET_PATH="/run/uon/zsp.sock"
+EXEC_GROUP="uon-exec"
 SSHD_CONFIG_FILE="/etc/ssh/sshd_config"
 
 # Optional Subnet Constraint (Archived for future strict `Match Address` parsing)
@@ -43,6 +48,9 @@ function fail() { echo -e "${RED}[ERROR] $1${NC}" >&2; exit 1; }
 if ! id "$TARGET_USER" >/dev/null 2>&1; then
     fail "Target user '$TARGET_USER' does not exist."
 fi
+
+command -v python3 >/dev/null 2>&1 || fail "python3 is required on the target host."
+command -v systemctl >/dev/null 2>&1 || fail "systemd is required for the persistent ZSP broker."
 
 # ==============================================================================
 # Step 1: Directory Scaffolding
@@ -75,6 +83,78 @@ fi
 
 chmod +x "$VERIFIER_DEST"
 chown root:root "$VERIFIER_DEST"
+
+# ==============================================================================
+# Step 2b: Persistent ZSP Broker Deployment
+# ==============================================================================
+print_step "Deploying Persistent ZSP Broker to $BROKER_DEST"
+
+BROKER_SOURCE="${BROKER_SOURCE:-scripts/uon_zsp_broker.py}"
+
+mkdir -p "$(dirname "$BROKER_DEST")"
+if [[ -f "$BROKER_SOURCE" ]]; then
+    cp "$BROKER_SOURCE" "$BROKER_DEST"
+else
+    curl -sL "https://raw.githubusercontent.com/sebastienrousseau/uon/main/scripts/uon_zsp_broker.py" -o "$BROKER_DEST" || fail "Unable to fetch ZSP broker."
+fi
+
+chmod +x "$BROKER_DEST"
+chown root:root "$BROKER_DEST"
+
+print_step "Provisioning static least-privilege ZSP identities"
+
+if ! getent group "$EXEC_GROUP" >/dev/null 2>&1; then
+    groupadd --system "$EXEC_GROUP"
+fi
+
+TARGET_UID=$(id -u "$TARGET_USER")
+TARGET_GID=$(id -g "$TARGET_USER")
+EXEC_GID=$(getent group "$EXEC_GROUP" | cut -d: -f3)
+
+cat > "$BROKER_ENV_FILE" <<EOF
+UON_ZSP_SOCKET=$BROKER_SOCKET_PATH
+UON_ZSP_TARGET_UID=$TARGET_UID
+UON_ZSP_EXEC_GID=$EXEC_GID
+UON_ZSP_SOCKET_UID=$TARGET_UID
+UON_ZSP_SOCKET_GID=$TARGET_GID
+EOF
+chmod 600 "$BROKER_ENV_FILE"
+chown root:root "$BROKER_ENV_FILE"
+
+cat > "$BROKER_SERVICE_FILE" <<EOF
+[Unit]
+Description=UON Zero Standing Privilege Broker
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=$BROKER_ENV_FILE
+ExecStart=/usr/bin/env python3 $BROKER_DEST
+Restart=on-failure
+RuntimeDirectory=uon
+RuntimeDirectoryMode=0755
+UMask=0007
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+RestrictAddressFamilies=AF_UNIX
+CapabilityBoundingSet=CAP_CHOWN CAP_SETGID CAP_SETUID
+AmbientCapabilities=CAP_CHOWN CAP_SETGID CAP_SETUID
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now uon-zsp-broker.service
+
+for _ in $(seq 1 20); do
+    [[ -S "$BROKER_SOCKET_PATH" ]] && break
+    sleep 0.25
+done
+
+[[ -S "$BROKER_SOCKET_PATH" ]] || fail "ZSP broker socket did not appear at $BROKER_SOCKET_PATH."
 
 # ==============================================================================
 # Step 3: Payload Enforcement (OpenSSH `command=` Hooking)

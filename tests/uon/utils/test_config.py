@@ -196,3 +196,25 @@ class TestTargetStore:
         store = TargetStore(path=tmp_targets_file)
         store.add(sample_target)
         assert tmp_targets_file.exists()
+
+    def test_add_skips_rewrite_when_target_is_unchanged(
+        self, tmp_targets_file: Path, sample_target: Target
+    ) -> None:
+        store = TargetStore(path=tmp_targets_file)
+        store.add(sample_target)
+        initial_payload = tmp_targets_file.read_text(encoding="utf-8")
+
+        store.add(sample_target)
+
+        assert tmp_targets_file.read_text(encoding="utf-8") == initial_payload
+
+    def test_save_skips_rewrite_when_serialized_payload_is_unchanged(
+        self, tmp_targets_file: Path, sample_target: Target
+    ) -> None:
+        store = TargetStore(path=tmp_targets_file)
+        store.add(sample_target)
+        initial_payload = tmp_targets_file.read_text(encoding="utf-8")
+
+        store._save()
+
+        assert tmp_targets_file.read_text(encoding="utf-8") == initial_payload

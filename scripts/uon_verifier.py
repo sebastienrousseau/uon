@@ -15,8 +15,11 @@ import base64
 import hashlib
 import json
 import os
+import shlex
+import sqlite3
 import sys
 import time
+from contextlib import suppress
 from typing import Any
 
 from fido2 import cbor
@@ -28,50 +31,122 @@ AUTHORIZED_KEYS_FILE = os.path.expanduser("~/.config/uon/authorized_passkeys.jso
 USED_SESSIONS_FILE = os.path.expanduser("~/.config/uon/used_sessions.json")
 UON_RP_ID = b"uon.local"
 SESSION_TTL_SECONDS = 300  # 5 minutes — envelope lifetime
+_AUTHORIZED_KEYS_CACHE: tuple[int | None, list[Any]] | None = None
+
+
+def _file_mtime_ns(path: str) -> int | None:
+    """Return the file mtime in nanoseconds, or ``None`` when unavailable."""
+    try:
+        return os.stat(path).st_mtime_ns
+    except OSError:
+        return None
+
+
+def _connect_nonce_cache() -> sqlite3.Connection:
+    """Open the replay-protection cache and ensure the schema exists."""
+    config_dir = os.path.dirname(USED_SESSIONS_FILE)
+    os.makedirs(config_dir, mode=0o700, exist_ok=True)
+    conn = sqlite3.connect(USED_SESSIONS_FILE)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS used_sessions (
+            session_id TEXT PRIMARY KEY,
+            used_at REAL NOT NULL
+        )
+        """
+    )
+    with suppress(OSError):
+        os.chmod(USED_SESSIONS_FILE, 0o600)
+    return conn
+
+
+def _b64url_decode(value: str) -> bytes:
+    """Decode URL-safe base64 strings emitted by the Rust core."""
+    padded = value + "=" * (-len(value) % 4)
+    return base64.urlsafe_b64decode(padded)
 
 
 def _load_nonce_cache() -> dict[str, float]:
     """Load the used session nonce cache, purging entries older than 5 minutes."""
-    if not os.path.exists(USED_SESSIONS_FILE):
-        return {}
-    try:
-        with open(USED_SESSIONS_FILE) as f:
-            cache: dict[str, float] = json.load(f)
-    except (json.JSONDecodeError, OSError):
-        return {}
     now = time.time()
-    return {sid: ts for sid, ts in cache.items() if now - ts < SESSION_TTL_SECONDS}
+    try:
+        with _connect_nonce_cache() as conn:
+            conn.execute(
+                "DELETE FROM used_sessions WHERE used_at < ?",
+                (now - SESSION_TTL_SECONDS,),
+            )
+            rows = conn.execute("SELECT session_id, used_at FROM used_sessions").fetchall()
+    except sqlite3.DatabaseError:
+        return {}
+    return {str(session_id): float(used_at) for session_id, used_at in rows}
 
 
 def _save_nonce_cache(cache: dict[str, float]) -> None:
     """Persist the nonce cache with restrictive permissions."""
-    config_dir = os.path.dirname(USED_SESSIONS_FILE)
-    os.makedirs(config_dir, mode=0o700, exist_ok=True)
-    fd = os.open(USED_SESSIONS_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
-        with os.fdopen(fd, "w") as f:
-            json.dump(cache, f)
-    except Exception:  # noqa: S110 — best-effort persistence
+        with _connect_nonce_cache() as conn:
+            conn.execute("DELETE FROM used_sessions")
+            conn.executemany(
+                "INSERT OR REPLACE INTO used_sessions(session_id, used_at) VALUES(?, ?)",
+                cache.items(),
+            )
+    except sqlite3.DatabaseError:
         pass
 
 
 def _check_replay(session_id: str) -> None:
     """Reject replayed session IDs and record the current one."""
-    cache = _load_nonce_cache()
-    if session_id in cache:
-        print("UON Verifier Error: Replay detected — session already used.", file=sys.stderr)
+    now = time.time()
+    try:
+        with _connect_nonce_cache() as conn:
+            conn.execute(
+                "DELETE FROM used_sessions WHERE used_at < ?",
+                (now - SESSION_TTL_SECONDS,),
+            )
+            existing = conn.execute(
+                "SELECT 1 FROM used_sessions WHERE session_id = ?",
+                (session_id,),
+            ).fetchone()
+            if existing is not None:
+                print(
+                    "UON Verifier Error: Replay detected — session already used.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            conn.execute(
+                "INSERT INTO used_sessions(session_id, used_at) VALUES(?, ?)",
+                (session_id, now),
+            )
+    except sqlite3.DatabaseError as exc:
+        print(f"UON Verifier Error: Replay cache unavailable - {exc}", file=sys.stderr)
         sys.exit(1)
-    cache[session_id] = time.time()
-    _save_nonce_cache(cache)
 
 
-def load_authorized_keys() -> list[dict[str, Any]]:
-    """Load the allowed FIDO2 COSE public keys for this user."""
+def load_authorized_keys() -> list[Any]:
+    """Load and cache the allowed FIDO2 COSE public keys for this user."""
+    global _AUTHORIZED_KEYS_CACHE
+
     if not os.path.exists(AUTHORIZED_KEYS_FILE):
         print("UON Verifier Error: No authorized passkeys found.", file=sys.stderr)
         sys.exit(1)
-    with open(AUTHORIZED_KEYS_FILE) as f:
-        return json.load(f)
+
+    mtime_ns = _file_mtime_ns(AUTHORIZED_KEYS_FILE)
+    if _AUTHORIZED_KEYS_CACHE is not None and _AUTHORIZED_KEYS_CACHE[0] == mtime_ns:
+        return _AUTHORIZED_KEYS_CACHE[1]
+
+    with open(AUTHORIZED_KEYS_FILE, encoding="utf-8") as f:
+        key_records: list[dict[str, Any]] = json.load(f)
+
+    parsed_keys = []
+    for key_record in key_records:
+        try:
+            cbor_bytes = bytes.fromhex(key_record["cose_key_hex"])
+            parsed_keys.append(CoseKey.parse(cbor.decode(cbor_bytes)))
+        except (KeyError, TypeError, ValueError):
+            continue
+
+    _AUTHORIZED_KEYS_CACHE = (mtime_ns, parsed_keys)
+    return parsed_keys
 
 
 def verify_and_execute() -> None:
@@ -96,6 +171,8 @@ def verify_and_execute() -> None:
         payload = envelope
         session_id = payload.get("session_id", "")
         command = payload["command"]
+        if isinstance(command, list):
+            command = shlex.join(str(part) for part in command)
         assertion = payload["assertion"]
     except Exception as e:
         print(f"UON Verifier Error: Malformed envelope - {e}", file=sys.stderr)
@@ -106,11 +183,6 @@ def verify_and_execute() -> None:
         print("UON Verifier Error: Missing session_id in envelope.", file=sys.stderr)
         sys.exit(1)
     _check_replay(session_id)
-
-    # 3. Parse FIDO2 Assertion Data (URL-safe base64 without padding from Rust core)
-    def _b64url_decode(s: str) -> bytes:
-        padded = s + "=" * (-len(s) % 4)
-        return base64.urlsafe_b64decode(padded)
 
     client_data_bytes = _b64url_decode(assertion["client_data"])
     auth_data_bytes = _b64url_decode(assertion["auth_data"])
@@ -142,16 +214,10 @@ def verify_and_execute() -> None:
     signature_base = auth_data_bytes + client_data_hash
 
     # D) Validate Signature against authorized keys
-    keys = load_authorized_keys()
     is_verified = False
 
-    for key_record in keys:
+    for public_key in load_authorized_keys():
         try:
-            # Reconstruct the COSE Public Key from stored mapping.
-            # fido2 >= 1.1.0: CoseKey.parse() expects a dict (Mapping), not raw bytes.
-            # Decode CBOR first, then parse the resulting dict.
-            cbor_bytes = bytes.fromhex(key_record["cose_key_hex"])
-            public_key = CoseKey.parse(cbor.decode(cbor_bytes))
             public_key.verify(signature_base, signature)
             is_verified = True
             break
@@ -174,7 +240,7 @@ def verify_and_execute() -> None:
     from uon import core  # type: ignore[import-untyped]
 
     try:
-        # spawn_zsp_process: GroupAdd -> Sudo -> eBPF sandbox -> Wait -> GroupDel
+        # spawn_zsp_process: broker request -> least-privilege exec -> streamed result
         exit_code = core.spawn_zsp_process(command)
         sys.exit(exit_code)
     except Exception as e:
