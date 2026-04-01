@@ -259,10 +259,7 @@ class TargetStore:
 
     def _save(self) -> None:
         """Atomically write all targets to disk (write to ``.tmp``, then ``os.replace``)."""
-        payload = [
-            asdict(self._targets[alias])
-            for alias in sorted(self._targets)
-        ]
+        payload = [asdict(self._targets[alias]) for alias in sorted(self._targets)]
         serialized_payload = json.dumps(payload, separators=(",", ":"), sort_keys=True)
         if serialized_payload == self._serialized_payload:
             return
