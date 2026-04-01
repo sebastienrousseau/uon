@@ -17,11 +17,11 @@ import logging
 import platform
 
 try:
-    from bcc import BPF  # type: ignore
+    from bcc import BPF  # type: ignore[import-not-found]
 
     HAS_BCC = True
 except ImportError:
-    BPF = None  # type: ignore
+    BPF = None
     HAS_BCC = False
 
 

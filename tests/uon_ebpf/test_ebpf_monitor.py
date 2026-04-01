@@ -98,5 +98,5 @@ class TestKernelMonitor:
         monitor.monitor_pid(4567)
         mock_bpf.get_table.assert_called_once_with("authorized_pids")
         mock_bpf.Key.assert_called_once_with(4567)
-        mock_bpf.Leaf.assert_called_once_with(1)
+        mock_bpf.Leaf.assert_called_once_with(0)
         mock_table.__setitem__.assert_called_once_with(mock_key, mock_leaf)

@@ -256,17 +256,43 @@ class TestRunCommand:
         store.add(t)
 
         mock_challenge.return_value = (b"\x00" * 32, b"\x01" * 32)
-        
+
         from uon.contracts.fido_dto import FidoAssertionDto
+
         mock_resolve.return_value = FidoAssertionDto(
             credential_id=b"cid", auth_data=b"ad", client_data=b"cd", signature=b"sig"
         )
-        
+
         mock_exec.return_value = (0, "done\n", "")
 
         with pytest.raises(SystemExit) as exc_info:
             _run_command("dev", "uptime")
         assert exc_info.value.code == 0
+
+    @patch("uon.cli.core.execute_session")
+    @patch("uon.cli._resolve_signature")
+    @patch("uon.cli.core.generate_challenge")
+    def test_execute_failure(
+        self,
+        mock_challenge: MagicMock,
+        mock_resolve: MagicMock,
+        mock_exec: MagicMock,
+        isolate_store: Path,
+    ) -> None:
+        from uon.contracts.fido_dto import FidoAssertionDto
+
+        store = TargetStore()
+        store.add(Target(alias="dev", host="10.0.0.1", credentials=[Credential(id="Y3JlZA==")]))
+
+        mock_challenge.return_value = (b"\x00" * 32, b"\x01" * 32)
+        mock_resolve.return_value = FidoAssertionDto(
+            credential_id=b"cid", auth_data=b"ad", client_data=b"cd", signature=b"sig"
+        )
+        mock_exec.side_effect = RuntimeError("ssh broke")
+
+        with pytest.raises(SystemExit) as exc_info:
+            _run_command("dev", "uptime")
+        assert exc_info.value.code == 1
 
 
 # ── _resolve_signature ──────────────────────────────────────────────
@@ -293,7 +319,12 @@ class TestResolveSignature:
         from uon.contracts.fido_dto import FidoAssertionDto
 
         mock_auth.side_effect = NoPlatformAuthenticatorError("none")
-        expected_dto = FidoAssertionDto(credential_id=b"qr-cid", client_data=b"cd", auth_data=b"ad", signature=b"sig")
+        expected_dto = FidoAssertionDto(
+            credential_id=b"qr-cid",
+            client_data=b"cd",
+            auth_data=b"ad",
+            signature=b"sig",
+        )
         mock_qr.return_value = expected_dto
 
         result = _resolve_signature(b"c", [b"id"])
@@ -305,9 +336,14 @@ class TestResolveSignature:
         self, mock_auth: MagicMock, mock_qr: MagicMock
     ) -> None:
         from uon.contracts.fido_dto import FidoAssertionDto
-        
+
         mock_auth.side_effect = ValueError("device error")
-        expected_dto = FidoAssertionDto(credential_id=b"qr-cid", client_data=b"cd", auth_data=b"ad", signature=b"sig")
+        expected_dto = FidoAssertionDto(
+            credential_id=b"qr-cid",
+            client_data=b"cd",
+            auth_data=b"ad",
+            signature=b"sig",
+        )
         mock_qr.return_value = expected_dto
 
         result = _resolve_signature(b"c", [b"id"])

@@ -13,7 +13,7 @@ before the SSH transport and FIDO2 assertions proceed.
 
 from __future__ import annotations
 
-from uon import core  # type: ignore[import-untyped,import-not-found]
+from uon import core
 
 
 def compute_amdns_hmac(ble_secret: bytes, target_alias: str, timestamp: int) -> str:
@@ -28,13 +28,13 @@ def compute_amdns_hmac(ble_secret: bytes, target_alias: str, timestamp: int) -> 
         A hex-encoded HMAC string representing the current cryptographic
         expectation for the network target.
     """
-    return core.compute_amdns_hmac(ble_secret, target_alias, timestamp)  # type: ignore[no-any-return,unused-ignore]
+    return core.compute_amdns_hmac(ble_secret, target_alias, timestamp)
 
 
 def verify_discovery_beacon(
     ble_secret: bytes, target_alias: str, reported_hmac: str, time_tolerance_seconds: int = 30
 ) -> bool:
-    """Validate an intercepted AmDNS beacon via the high-throughput Rust parser natively evaluating clock drifts.
+    """Validate an intercepted AmDNS beacon via Rust while tolerating clock drift.
 
     Args:
         ble_secret:   The 32-byte secret negotiated via the active BLE connection.
@@ -46,6 +46,6 @@ def verify_discovery_beacon(
         ``True`` if the beacon mathematically proves ownership of the BLE
         secret; ``False`` otherwise.
     """
-    return core.verify_discovery_beacon(  # type: ignore[no-any-return,unused-ignore]
+    return core.verify_discovery_beacon(
         ble_secret, target_alias, reported_hmac, time_tolerance_seconds
     )

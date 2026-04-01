@@ -44,6 +44,7 @@ import sys
 
 import click
 
+from uon import core
 from uon.auth.fido_local import (
     RP_ID,
     NoPlatformAuthenticatorError,
@@ -56,7 +57,6 @@ from uon.auth.fido_local import (
 )
 from uon.auth.qr_bridge import request_signature_via_qr
 from uon.contracts.fido_dto import FidoAssertionDto
-from uon import core  # type: ignore[import-untyped,import-not-found]
 from uon.utils.config import Credential, Target, TargetStore
 from uon.utils.policy import PolicyStore, is_valid_aaguid
 

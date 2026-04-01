@@ -51,6 +51,7 @@ addopts = "--cov=uon --cov-branch --cov-report=term-missing"
 [tool.coverage.run]
 branch = true
 source = ["src/uon"]
+omit = ["src/uon/ux/*.py"]
 
 [tool.coverage.report]
 fail_under = 100

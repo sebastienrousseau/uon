@@ -188,3 +188,11 @@ class TestTargetStore:
         assert got is not None
         assert got.host == sample_target.host
         assert got.user == sample_target.user
+
+    def test_save_skips_chmod_on_windows(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_targets_file: Path, sample_target: Target
+    ) -> None:
+        monkeypatch.setattr("uon.utils.config.sys.platform", "win32")
+        store = TargetStore(path=tmp_targets_file)
+        store.add(sample_target)
+        assert tmp_targets_file.exists()

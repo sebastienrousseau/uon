@@ -18,8 +18,8 @@ from textual.containers import Center, Grid
 from textual.screen import ModalScreen
 from textual.widgets import Button, Label, Static
 
-from uon.auth.fido_local import prompt_fido2_step_up  # type: ignore[attr-defined]
-from uon import core  # type: ignore[import-untyped,import-not-found]
+from uon import core
+from uon.auth.fido_local import prompt_fido2_step_up
 
 logger = logging.getLogger(__name__)
 

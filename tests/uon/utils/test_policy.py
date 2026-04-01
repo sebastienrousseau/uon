@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from uon.utils.policy import PolicyStore, is_valid_aaguid
 
 # ── is_valid_aaguid() ────────────────────────────────────────────────
@@ -101,6 +103,14 @@ class TestPolicyStore:
         store = PolicyStore(path=tmp_path / "does_not_exist.json")
         assert store.is_enforcing is False
         assert store.list_aaguids() == []
+
+    def test_save_skips_chmod_on_windows(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_policy_file: Path
+    ) -> None:
+        monkeypatch.setattr("sys.platform", "win32")
+        store = PolicyStore(path=tmp_policy_file)
+        assert store.add("2fc0579f-8113-47ea-b116-bb5a8db9202a") is True
+        assert tmp_policy_file.exists()
 
 
 # ── check_credential() ──────────────────────────────────────────────

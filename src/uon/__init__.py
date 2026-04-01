@@ -27,11 +27,13 @@ Critical path (per-command lifecycle):
 2. ``auth.fido_local`` signs the nonce inside the hardware enclave
    (graceful degradation to ``auth.qr_bridge`` if no local authenticator
    is detected).
-3. ``cli`` passes the signed assertion to ``core.execute_session()``, 
-   which dynamically wraps a PQC envelope and transmits it natively via 
+3. ``cli`` passes the signed assertion to ``core.execute_session()``,
+   which dynamically wraps a PQC envelope and transmits it natively via
    Tokio/Russh.
 
 Security boundary: the private key **never** leaves the hardware enclave.
 The target machine independently verifies the FIDO2 signature before
 executing any command.
 """
+
+from . import core as core

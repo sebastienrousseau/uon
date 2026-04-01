@@ -28,6 +28,8 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 
+from uon import core
+
 app = FastAPI(title="uon_ssf_receiver", version="1.0.0")
 
 # The shared secret MUST be set via environment variable in production.
@@ -83,9 +85,6 @@ def kill_uon_sessions(subject_identifier: str) -> None:
         logging.error("Failed to terminate uon sessions: %s", e)
 
 
-from uon import core  # type: ignore[import-untyped,import-not-found]
-
-
 @app.post("/ssf/events")
 async def receive_ssf_event(request: Request) -> dict[str, str]:
     """Ingest a Security Event Token from the IdP stream natively parsed in Rust.
@@ -99,16 +98,16 @@ async def receive_ssf_event(request: Request) -> dict[str, str]:
         body_bytes = await request.body()
         payload = body_bytes.decode("utf-8")
 
-        identifier = core.parse_ssf_event(payload)  # type: ignore[attr-defined]
+        identifier = core.parse_ssf_event(payload)
 
         if identifier is not None:
             kill_uon_sessions(identifier)
             return {"status": "accepted"}
 
         return {"status": "ignored", "reason": "event_type_not_actionable"}
-    except ValueError as e:
-        logging.error("Invalid SSF payload: %s", e)
-        raise HTTPException(status_code=400, detail="Invalid SET payload")
-    except Exception as e:
-        logging.error("SSF processing error: %s", e)
-        raise HTTPException(status_code=500, detail="Internal server error")
+    except ValueError as exc:
+        logging.error("Invalid SSF payload: %s", exc)
+        raise HTTPException(status_code=400, detail="Invalid SET payload") from exc
+    except Exception as exc:
+        logging.error("SSF processing error: %s", exc)
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
