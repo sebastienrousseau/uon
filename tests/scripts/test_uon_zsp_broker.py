@@ -3,16 +3,23 @@
 # Licensed under the GNU AGPLv3 License. See LICENSE file in the project root
 # for full license information.
 
-"""Tests for the persistent ZSP broker."""
+"""Tests for the Rust-backed persistent ZSP broker launcher."""
 
 from __future__ import annotations
 
 import importlib.util
+import os
+import signal
+import subprocess
+import sys
+import time
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+
+from uon.core import spawn_zsp_process
 
 
 def _import_broker() -> Any:
@@ -32,33 +39,50 @@ def broker() -> Any:
     return _import_broker()
 
 
-def test_run_command_encodes_streams_and_exit_code(
-    broker: Any, monkeypatch: pytest.MonkeyPatch
+def test_launcher_delegates_to_rust_core(broker: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    mock_core = MagicMock()
+    mock_core.run_zsp_broker.return_value = None
+    monkeypatch.setitem(sys.modules, "uon", MagicMock(core=mock_core))
+
+    assert broker.main() == 0
+    mock_core.run_zsp_broker.assert_called_once_with()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Unix socket broker requires POSIX")
+def test_rust_broker_executes_round_trip(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capfd: pytest.CaptureFixture[str]
 ) -> None:
-    process = MagicMock()
-    process.communicate.return_value = (b"hello", b"warn")
-    process.returncode = 7
+    socket_path = tmp_path / "zsp.sock"
+    repo_root = Path(__file__).resolve().parents[2]
+    broker_script = Path(__file__).resolve().parents[2] / "scripts" / "uon_zsp_broker.py"
+    env = os.environ.copy()
+    existing_pythonpath = env.get("PYTHONPATH")
+    src_path = str(repo_root / "src")
+    env["PYTHONPATH"] = src_path if not existing_pythonpath else f"{src_path}:{existing_pythonpath}"
+    env["UON_ZSP_SOCKET"] = str(socket_path)
+    env["UON_ZSP_TARGET_UID"] = str(os.getuid())
+    env["UON_ZSP_EXEC_GID"] = str(os.getgid())
+    env["UON_ZSP_SOCKET_UID"] = str(os.getuid())
+    env["UON_ZSP_SOCKET_GID"] = str(os.getgid())
 
-    popen = MagicMock(return_value=process)
-    monkeypatch.setattr(broker.subprocess, "Popen", popen)
+    proc = subprocess.Popen(  # noqa: S603 - test launches the local broker entrypoint
+        [sys.executable, str(broker_script)],
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        for _ in range(100):
+            if socket_path.exists():
+                break
+            time.sleep(0.05)
+        assert socket_path.exists()
 
-    result = broker._run_command("echo hello")
-
-    assert result["exit_code"] == 7
-    assert result["stdout"] == "aGVsbG8="
-    assert result["stderr"] == "d2Fybg=="
-
-
-def test_handle_connection_returns_error_payload_on_bad_request(broker: Any) -> None:
-    conn = MagicMock()
-    reader = MagicMock()
-    reader.readline.return_value = "not-json\n"
-    writer = MagicMock()
-    conn.makefile.side_effect = [reader, writer]
-    conn.__enter__.return_value = conn
-
-    broker._handle_connection(conn)
-
-    writer.write.assert_called()
-    payload = writer.write.call_args_list[0].args[0]
-    assert '"exit_code":1' in payload
+        monkeypatch.setenv("UON_ZSP_SOCKET", str(socket_path))
+        assert spawn_zsp_process("printf hello") == 0
+        captured = capfd.readouterr()
+        assert captured.out == "hello"
+        assert captured.err == ""
+    finally:
+        proc.send_signal(signal.SIGTERM)
+        proc.wait(timeout=5)
