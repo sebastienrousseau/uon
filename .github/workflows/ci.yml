@@ -35,6 +35,16 @@ jobs:
       - name: Install project and dev tools
         run: poetry install --no-interaction --extras dev
 
+      # `poetry install` resolves and installs the dependency set, but it
+      # does not compile the maturin extension module into the venv.
+      # `uon/__init__.py` does `from . import core`, so without this the
+      # test job dies at conftest import with "cannot import name 'core'
+      # from partially initialized module 'uon'".
+      - name: Build the Rust extension into the venv
+        run: |
+          poetry run pip install "maturin>=1.5,<2.0"
+          poetry run maturin develop
+
       - name: Lint (Ruff)
         run: |
           poetry run ruff check .
