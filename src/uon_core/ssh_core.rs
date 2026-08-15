@@ -55,7 +55,7 @@ fn pqc_encapsulate(envelope_json: &[u8]) -> Result<String, String> {
     let mut kem_secret = [0u8; 32];
     rng.fill(&mut kem_secret).map_err(|_| "Failed RNG")?;
     let mut hasher = Sha256::new();
-    hasher.update(&kem_secret);
+    hasher.update(kem_secret);
     let shared_secret = hasher.finalize();
 
     let mut nonce_bytes = [0u8; 12];
@@ -272,8 +272,8 @@ pub fn generate_challenge() -> PyResult<(Vec<u8>, Vec<u8>)> {
         .map_err(|_| PyRuntimeError::new_err("Failed RNG"))?;
 
     let mut hasher = Sha256::new();
-    hasher.update(&nonce);
-    hasher.update(&extra);
+    hasher.update(nonce);
+    hasher.update(extra);
     let session_id = hasher.finalize().to_vec();
 
     Ok((nonce.to_vec(), session_id))
@@ -281,6 +281,11 @@ pub fn generate_challenge() -> PyResult<(Vec<u8>, Vec<u8>)> {
 
 /// Orchestrates an asynchronous SSH connection natively to execute FIDO2 signed payloads.
 /// Contains the consolidated routing logic formerly inside `cli.py` and `ssh_client.py`.
+// The arity is fixed by two external contracts, not by choice: this is the
+// PyO3 entry point Python calls, and the last four arguments are the FIDO2
+// assertion fields (credential id, client data, auth data, signature).
+// Grouping them into a struct would change the Python-facing signature.
+#[allow(clippy::too_many_arguments)]
 #[pyfunction]
 pub fn execute_session(
     host: String,
