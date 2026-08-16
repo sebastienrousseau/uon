@@ -6,8 +6,12 @@ license = "AGPL-3.0-or-later"
 
 [lib]
 name = "uon_core"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 path = "src/uon_core/lib.rs"
+
+[[bin]]
+name = "uon_zsp_broker"
+path = "src/uon_core/bin/uon_zsp_broker.rs"
 
 [dependencies]
 # Standard cross-platform dependencies

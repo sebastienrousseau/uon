@@ -17,3 +17,4 @@ htmlcov/
 .coverage
 coverage.xml
 *.so
+.codex
