@@ -4,12 +4,8 @@ on:
   push:
     branches:
       - main
-      - feat/v0.0.3
     paths:
       - 'src/uon_site/index.html'
-      - 'src/uon_site/articles.html'
-      - 'src/uon_site/faq.html'
-      - 'src/uon_site/download.html'
       - 'src/uon_site/styles.css'
       - 'src/uon_site/build.js'
   workflow_dispatch:
@@ -33,7 +29,7 @@ jobs:
         run: cd src/uon_site && node build.js
 
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+        uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./src/uon_site/dist
