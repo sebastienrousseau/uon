@@ -5,14 +5,20 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
+import signal
+import subprocess
 import sys
 import tempfile
+import time
 import timeit
+from contextlib import contextmanager
 from pathlib import Path
 from statistics import mean
 from types import ModuleType
 from unittest.mock import MagicMock
 
+from uon.core import spawn_zsp_process
 from uon.utils.config import Target, TargetStore
 
 
@@ -68,12 +74,63 @@ def benchmark_target_store_noop_write(tmp_dir: Path) -> dict[str, float]:
     return baseline
 
 
+@contextmanager
+def _rust_broker_process(tmp_dir: Path) -> object:
+    socket_path = tmp_dir / "zsp.sock"
+    repo_root = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    existing_pythonpath = env.get("PYTHONPATH")
+    src_path = str(repo_root / "src")
+    env["PYTHONPATH"] = src_path if not existing_pythonpath else f"{src_path}:{existing_pythonpath}"
+    env["UON_ZSP_SOCKET"] = str(socket_path)
+    env["UON_ZSP_TARGET_UID"] = str(os.getuid())
+    env["UON_ZSP_EXEC_GID"] = str(os.getgid())
+    env["UON_ZSP_SOCKET_UID"] = str(os.getuid())
+    env["UON_ZSP_SOCKET_GID"] = str(os.getgid())
+    broker_script = Path(__file__).resolve().with_name("uon_zsp_broker.py")
+    proc = subprocess.Popen(  # noqa: S603 - benchmark launches the local broker entrypoint
+        [sys.executable, str(broker_script)],
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    previous_socket = os.environ.get("UON_ZSP_SOCKET")
+    try:
+        for _ in range(100):
+            if socket_path.exists():
+                break
+            time.sleep(0.05)
+        if not socket_path.exists():
+            raise RuntimeError(f"Broker socket did not appear at {socket_path}")
+        os.environ["UON_ZSP_SOCKET"] = str(socket_path)
+        yield socket_path
+    finally:
+        if previous_socket is None:
+            os.environ.pop("UON_ZSP_SOCKET", None)
+        else:
+            os.environ["UON_ZSP_SOCKET"] = previous_socket
+        proc.send_signal(signal.SIGTERM)
+        proc.wait(timeout=5)
+
+
+def benchmark_zsp_broker_round_trip(tmp_dir: Path) -> dict[str, float]:
+    with _rust_broker_process(tmp_dir):
+        cold = timeit.timeit(lambda: spawn_zsp_process("true"), number=1) * 1_000
+        warm_samples = timeit.repeat(lambda: spawn_zsp_process("true"), number=1, repeat=50)
+    return {
+        "cold_ms": cold,
+        "min_ms": min(warm_samples) * 1_000,
+        "avg_ms": mean(warm_samples) * 1_000,
+    }
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="uon-bench-") as tmp:
         tmp_dir = Path(tmp)
         result = {
             "authorized_key_cache": benchmark_authorized_key_cache(tmp_dir),
             "target_store_noop_add": benchmark_target_store_noop_write(tmp_dir),
+            "zsp_broker_round_trip": benchmark_zsp_broker_round_trip(tmp_dir),
         }
         print(json.dumps(result, indent=2, sort_keys=True))
     return 0

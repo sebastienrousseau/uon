@@ -687,8 +687,11 @@ scp ~/.config/uon/authorized_passkeys.json admin@target:~/.config/uon/
 The SSH transport layer rejected your connection before uon could send
 the signed envelope.  Check:
 
-- Is your standard SSH key (`~/.ssh/id_ed25519` or `~/.ssh/id_rsa`)
-  installed in the target's `~/.ssh/authorized_keys`?
+- Is your standard SSH key (`~/.ssh/id_ed25519` or an ECDSA key)
+  loaded in your ssh-agent and installed in the target's
+  `~/.ssh/authorized_keys`?  uon does not use RSA keys: since 0.0.6 it
+  is built without RSA support, so an RSA key in the agent is skipped
+  and a server needs an ed25519 or ECDSA host key.
 - Did you accidentally remove the SSH key line when editing
   `authorized_keys` in Step 2.5?
 

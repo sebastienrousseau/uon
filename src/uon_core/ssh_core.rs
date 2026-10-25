@@ -223,8 +223,22 @@ impl Handler for ClientHandler {
 
     async fn check_server_key(
         &mut self,
-        server_public_key: &russh::keys::ssh_key::PublicKey,
+        server_key: &russh::keys::PublicKeyOrCertificate,
     ) -> Result<bool, Self::Error> {
+        // TOFU pins plain host keys. uon has no CA to validate a host
+        // certificate against, and does not advertise certificate host-key
+        // algorithms, so a certificate is refused rather than trusted.
+        let server_public_key = match server_key {
+            russh::keys::PublicKeyOrCertificate::PublicKey { key, .. } => key,
+            russh::keys::PublicKeyOrCertificate::Certificate(_) => {
+                eprintln!(
+                    "[uon] Connection refused: {} presented a host certificate, \
+                     which uon cannot verify.",
+                    self.host_id
+                );
+                return Ok(false);
+            }
+        };
         let fingerprint = compute_key_fingerprint(server_public_key);
         let known = load_known_hosts();
 

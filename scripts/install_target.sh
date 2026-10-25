@@ -87,7 +87,7 @@ chown root:root "$VERIFIER_DEST"
 # ==============================================================================
 # Step 2b: Persistent ZSP Broker Deployment
 # ==============================================================================
-print_step "Deploying Persistent ZSP Broker to $BROKER_DEST"
+print_step "Deploying Rust-backed Persistent ZSP Broker launcher to $BROKER_DEST"
 
 BROKER_SOURCE="${BROKER_SOURCE:-scripts/uon_zsp_broker.py}"
 
@@ -95,7 +95,7 @@ mkdir -p "$(dirname "$BROKER_DEST")"
 if [[ -f "$BROKER_SOURCE" ]]; then
     cp "$BROKER_SOURCE" "$BROKER_DEST"
 else
-    curl -sL "https://raw.githubusercontent.com/sebastienrousseau/uon/main/scripts/uon_zsp_broker.py" -o "$BROKER_DEST" || fail "Unable to fetch ZSP broker."
+    curl -sL "https://raw.githubusercontent.com/sebastienrousseau/uon/main/scripts/uon_zsp_broker.py" -o "$BROKER_DEST" || fail "Unable to fetch ZSP broker launcher."
 fi
 
 chmod +x "$BROKER_DEST"

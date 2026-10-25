@@ -38,6 +38,8 @@ mod fido2_core;
 mod ssf_core;
 #[cfg(not(target_arch = "wasm32"))]
 mod ssh_core;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod zsp_broker;
 #[cfg(target_arch = "wasm32")]
 mod wasm_bridge;
 #[cfg(not(target_arch = "wasm32"))]
@@ -60,6 +62,7 @@ fn core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(amdns_core::verify_discovery_beacon, m)?)?;
     m.add_function(wrap_pyfunction!(ssf_core::parse_ssf_event, m)?)?;
     m.add_function(wrap_pyfunction!(zsp_core::spawn_zsp_process, m)?)?;
+    m.add_function(wrap_pyfunction!(zsp_broker::run_zsp_broker, m)?)?;
 
     // Phase 8 Bindings (UX Interventions)
     m.add_function(wrap_pyfunction!(caep_intervention::freeze_execution, m)?)?;

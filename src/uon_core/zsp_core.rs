@@ -35,6 +35,7 @@ fn emit_stream(encoded: &str, mut stream: impl Write) -> PyResult<()> {
         .map_err(|e| PyRuntimeError::new_err(format!("Invalid broker stream payload: {}", e)))?;
     stream
         .write_all(&bytes)
+        .and_then(|_| stream.flush())
         .map_err(|e| PyRuntimeError::new_err(format!("Failed to forward broker stream: {}", e)))
 }
 
