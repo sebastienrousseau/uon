@@ -12,6 +12,7 @@ import os
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -50,9 +51,12 @@ def test_launcher_delegates_to_rust_core(broker: Any, monkeypatch: pytest.Monkey
 
 @pytest.mark.skipif(os.name != "posix", reason="Unix socket broker requires POSIX")
 def test_rust_broker_executes_round_trip(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capfd: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch, capfd: pytest.CaptureFixture[str]
 ) -> None:
-    socket_path = tmp_path / "zsp.sock"
+    # pytest's tmp_path can exceed macOS's 104-byte Unix socket path limit,
+    # so the socket lives in a directory directly under the system temp dir.
+    socket_dir = tempfile.TemporaryDirectory(prefix="uon-zsp-")
+    socket_path = Path(socket_dir.name) / "zsp.sock"
     repo_root = Path(__file__).resolve().parents[2]
     broker_script = Path(__file__).resolve().parents[2] / "scripts" / "uon_zsp_broker.py"
     env = os.environ.copy()
@@ -86,3 +90,4 @@ def test_rust_broker_executes_round_trip(
     finally:
         proc.send_signal(signal.SIGTERM)
         proc.wait(timeout=5)
+        socket_dir.cleanup()
