@@ -138,7 +138,9 @@ fn configure_privilege_drop(command: &mut Command) -> Result<(), String> {
             }
 
             let groups = [target_gid];
-            if libc::setgroups(groups.len(), groups.as_ptr()) != 0 {
+            // setgroups takes the count as size_t on Linux and int on macOS;
+            // `as _` picks the platform's type, and one group cannot truncate.
+            if libc::setgroups(groups.len() as _, groups.as_ptr()) != 0 {
                 return Err(std::io::Error::last_os_error());
             }
             if libc::setgid(target_gid) != 0 {
