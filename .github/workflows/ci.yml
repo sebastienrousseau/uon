@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+# The job only reads the code; it pushes nothing and calls no write API.
+permissions:
+  contents: read
+
 jobs:
   quality-and-security:
     runs-on: ubuntu-latest
