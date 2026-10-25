@@ -23,7 +23,8 @@ try {
 
   let finalSizeHTML = '';
 
-  const PAGES = ['index', 'articles', 'faq', 'download'];
+  // Only index.html exists; the site is a single page.
+  const PAGES = ['index'];
   for (let page of PAGES) {
     let htmlContent = fs.readFileSync(path.join(__dirname, page + '.html'), 'utf8');
 
