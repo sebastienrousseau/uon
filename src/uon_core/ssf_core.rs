@@ -56,11 +56,9 @@ pub fn parse_ssf_event(payload: &str) -> PyResult<Option<String>> {
     };
 
     if let Some(events) = v.get("events") {
-        let event_data = if let Some(data) = events.get(RISC_ACCOUNT_DISABLED) {
-            Some(data)
-        } else {
-            events.get(RISC_CREDENTIAL_CHANGE).map(|data| data)
-        };
+        let event_data = events
+            .get(RISC_ACCOUNT_DISABLED)
+            .or_else(|| events.get(RISC_CREDENTIAL_CHANGE));
 
         if let Some(data) = event_data {
             if let Some(subject) = data.get("subject") {

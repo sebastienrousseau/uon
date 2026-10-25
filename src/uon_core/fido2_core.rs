@@ -52,7 +52,7 @@ impl SecureEnvelope {
             if libc::mlock(ptr, len) != 0 {
                 eprintln!(
                     "[uon] WARNING: mlock failed (errno {}); secrets may page to swap",
-                    *libc::__errno_location(),
+                    std::io::Error::last_os_error(),
                 );
             }
 
@@ -60,7 +60,7 @@ impl SecureEnvelope {
             if libc::madvise(ptr, len, libc::MADV_DONTDUMP) != 0 {
                 eprintln!(
                     "[uon] WARNING: madvise(MADV_DONTDUMP) failed (errno {})",
-                    *libc::__errno_location(),
+                    std::io::Error::last_os_error(),
                 );
             }
 
