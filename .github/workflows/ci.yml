@@ -46,7 +46,7 @@ jobs:
       # from partially initialized module 'uon'".
       - name: Build the Rust extension into the venv
         run: |
-          poetry run pip install "maturin>=1.5,<2.0"
+          poetry run pip install "maturin>=1.10,<2.0"
           poetry run maturin develop
 
       - name: Lint (Ruff)
