@@ -3,6 +3,8 @@ name = "uon_core"
 version = "0.0.6"
 edition = "2021"
 license = "AGPL-3.0-or-later"
+description = "Rust core of uon: biometric-signed remote terminal execution."
+repository = "https://github.com/sebastienrousseau/uon"
 
 [lib]
 name = "uon_core"
