@@ -36,8 +36,13 @@ try {
     const cliHeader = htmlContent.substring(0, splitIndex);
     let domBody = htmlContent.substring(splitIndex);
 
-    // Strip HTML comments from DOM
-    domBody = domBody.replace(/<!--[\s\S]*?-->/g, '');
+    // Strip HTML comments from DOM. Repeat until nothing changes: one pass
+    // turns "<!<!-- a -->-- b -->" into "<!-- b -->", a comment again.
+    let previous;
+    do {
+      previous = domBody;
+      domBody = domBody.replace(/<!--[\s\S]*?-->/g, '');
+    } while (domBody !== previous);
     domBody = domBody.replace(/\s+/g, ' ');
     domBody = domBody.replace(/> </g, '><');
 
