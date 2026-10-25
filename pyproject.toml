@@ -51,6 +51,11 @@ dev = [
 [project.scripts]
 uon = "uon.cli:main"
 
+[project.urls]
+Homepage = "https://uon.me/"
+Repository = "https://github.com/sebastienrousseau/uon"
+Issues = "https://github.com/sebastienrousseau/uon/issues"
+
 [tool.maturin]
 features = ["pyo3/extension-module"]
 module-name = "uon.core"
