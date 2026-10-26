@@ -44,6 +44,61 @@ function print_step() { echo -e "${GREEN}==> $1${NC}"; }
 function print_warn() { echo -e "${YELLOW}[!] $1${NC}"; }
 function fail() { echo -e "${RED}[ERROR] $1${NC}" >&2; exit 1; }
 
+# The 2026 strict boundary prefix
+PREFIX='command="/usr/local/bin/uon_verifier.py",no-port-forwarding,no-X11-forwarding,no-agent-forwarding'
+
+# Prints the options field of an authorized_keys line: everything before
+# the first unquoted space or tab. Prints nothing when the line starts
+# with the key type, i.e. has no options. Option values may be quoted
+# and contain spaces and escaped quotes (from="a, b", command="x \"y\"").
+function key_options() {
+    local line=$1 i c quoted=0
+    case "$line" in ssh-*|ecdsa-*|sk-*) return 0 ;; esac
+    for ((i = 0; i < ${#line}; i++)); do
+        c=${line:i:1}
+        if [[ $c == "\\" ]]; then
+            i=$((i + 1))
+        elif [[ $c == '"' ]]; then
+            quoted=$((1 - quoted))
+        elif [[ ($c == ' ' || $c == $'\t') && $quoted == 0 ]]; then
+            printf '%s' "${line:0:i}"
+            return 0
+        fi
+    done
+}
+
+# Prints one authorized_keys line with the verifier hook in front of it.
+# Every key is hooked whatever its type (ed25519, ECDSA P-256/384/521,
+# FIDO sk-*, RSA) and whatever options it already has: uon's options go
+# first, the key's own follow. Blank lines, comments and lines already
+# hooked pass through. A key with its own forced command is left as it
+# is, with a warning, since OpenSSH accepts only one command= per key.
+function hook_authorized_key() {
+    local line=$1 key opts
+    key=${line#"${line%%[![:space:]]*}"}
+    if [[ -z $key || $key == \#* ]]; then
+        printf '%s\n' "$line"
+        return 0
+    fi
+    opts=$(key_options "$key")
+    if [[ $opts == *uon_verifier* ]]; then
+        printf '%s\n' "$key"
+    elif [[ $opts =~ (^|,)command= ]]; then
+        print_warn "Skipping key with existing conflicting command= restrictor." >&2
+        printf '%s\n' "$key"
+    elif [[ -n $opts ]]; then
+        printf '%s,%s\n' "$PREFIX" "$key"
+    else
+        printf '%s %s\n' "$PREFIX" "$key"
+    fi
+}
+
+# Tests source this file to call the functions above without provisioning
+# anything.
+if [[ -n "${UON_INSTALL_TARGET_SOURCE_ONLY:-}" ]]; then
+    return 0
+fi
+
 # Prevent silent failures if the user doesn't exist
 if ! id "$TARGET_USER" >/dev/null 2>&1; then
     fail "Target user '$TARGET_USER' does not exist."
@@ -161,24 +216,11 @@ done
 # ==============================================================================
 print_step "Injecting Verifier Hooks into $AUTH_KEYS"
 
-# The 2026 strict boundary prefix
-PREFIX='command="/usr/local/bin/uon_verifier.py",no-port-forwarding,no-X11-forwarding,no-agent-forwarding'
-
-# Idempotently update the authorized_keys file.
-# If a line does not start with `command=`, we prepend our zero-trust hooks.
+# Idempotently update the authorized_keys file: every key line gets the
+# zero-trust hook (see hook_authorized_key above).
 tmp_keys=$(mktemp)
-while IFS= read -r line; do
-    if [[ "$line" =~ ^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp256) ]]; then
-        echo "$PREFIX $line" >> "$tmp_keys"
-    elif [[ "$line" =~ ^command=.*uon_verifier.* ]]; then
-        # Already hooked; pass through natively
-        echo "$line" >> "$tmp_keys"
-    elif [[ "$line" =~ ^command= ]]; then
-        print_warn "Skipping key with existing conflicting command= restrictor."
-        echo "$line" >> "$tmp_keys"
-    else
-        echo "$line" >> "$tmp_keys"
-    fi
+while IFS= read -r line || [[ -n $line ]]; do
+    hook_authorized_key "$line" >> "$tmp_keys"
 done < "$AUTH_KEYS"
 
 cat "$tmp_keys" > "$AUTH_KEYS"
