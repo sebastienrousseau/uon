@@ -10,5 +10,6 @@ This directory stores repo-local release notes in the same format used for GitHu
 
 ## Available Notes
 
+- [v0.0.7](./v0.0.7.md)
 - [v0.0.6](./v0.0.6.md)
 - [v0.0.5](./v0.0.5.md)
