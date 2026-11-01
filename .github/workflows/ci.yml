@@ -62,3 +62,19 @@ jobs:
 
       - name: Test (Pytest)
         run: poetry run pytest --cov=uon --cov-branch --cov-report=xml --cov-fail-under=100
+
+  quality-and-security-all:
+    # Branch protection requires this check by name. It stands for every
+    # leg of the quality-and-security matrix, so adding or dropping a version never
+    # renames a required check.
+    name: quality-and-security (all)
+    if: always()
+    needs: quality-and-security
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Every leg of the matrix passed
+        env:
+          RESULT: ${{ needs.quality-and-security.result }}
+        run: test "$RESULT" = success
