@@ -69,6 +69,22 @@ try {
     fs.copyFileSync(SOURCE_FAVICON, OUTPUT_FAVICON);
   }
 
+  // Emit sitemap.xml and robots.txt for SEO & Search Console
+  const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://uon.me/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>
+`;
+  fs.writeFileSync(path.join(OUTPUT_DIR, 'sitemap.xml'), sitemapXml);
+  fs.writeFileSync(
+    path.join(OUTPUT_DIR, 'robots.txt'),
+    'User-agent: *\nAllow: /\n\nSitemap: https://uon.me/sitemap.xml\n'
+  );
+
   // Validate payload size
   const stats = fs.statSync(OUTPUT_HTML);
   const sizeKB = (stats.size / 1024).toFixed(2);
